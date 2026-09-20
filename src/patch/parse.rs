@@ -10,6 +10,10 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
         config: PatchConfig::default(),
         ..Patch::default()
     };
+    // `dt` and `rate` are resolved after the whole file is read, so they do not
+    // depend on whether `oversample` came before or after them.
+    let mut dt_directive: Option<(f32, usize)> = None;
+    let mut rate_directive: Option<(f32, usize)> = None;
 
     for (index, raw) in text.lines().enumerate() {
         let line = index + 1;
@@ -24,13 +28,14 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
         let rest: Vec<&str> = tokens.collect();
 
         match keyword {
-            "dt" => patch.config.dt = one_float(&rest, "dt", line)?,
-            "rate" => {
-                let hz = one_float(&rest, "rate", line)?;
-                if hz <= 0.0 {
-                    return Err(PatchError::at(line, "rate must be positive"));
+            "dt" => dt_directive = Some((one_float(&rest, "dt", line)?, line)),
+            "rate" => rate_directive = Some((one_float(&rest, "rate", line)?, line)),
+            "oversample" => {
+                let n = one_u64(&rest, "oversample", line)?;
+                if n == 0 {
+                    return Err(PatchError::at(line, "oversample must be at least 1"));
                 }
-                patch.config.dt = 1.0 / hz;
+                patch.config.oversample = n as u32;
             }
             "rail" => patch.config.rail = one_float(&rest, "rail", line)?,
             "seed" => patch.config.seed = one_u64(&rest, "seed", line)?,
@@ -44,16 +49,35 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
                 return Err(PatchError::at(
                     line,
                     format!(
-                        "unknown directive '{other}' (expected dt, rate, rail, seed, mismatch, \
-                         seconds, module, knob, patch or record)"
+                        "unknown directive '{other}' (expected dt, rate, oversample, rail, seed, \
+                         mismatch, seconds, module, knob, patch or record)"
                     ),
                 ))
             }
         }
     }
 
-    if patch.config.dt <= 0.0 {
-        return Err(PatchError::at(0, "dt must be positive"));
+    match (dt_directive, rate_directive) {
+        (Some((_, dt_line)), Some(_)) => {
+            return Err(PatchError::at(
+                dt_line,
+                "set either dt or rate, not both; rate is the frame rate and dt is 1/rate \
+                 divided by oversample",
+            ))
+        }
+        (Some((dt, line)), None) => {
+            if dt <= 0.0 {
+                return Err(PatchError::at(line, "dt must be positive"));
+            }
+            patch.config.sample_rate = 1.0 / (dt * patch.config.oversample as f32);
+        }
+        (None, Some((hz, line))) => {
+            if hz <= 0.0 {
+                return Err(PatchError::at(line, "rate must be positive"));
+            }
+            patch.config.sample_rate = hz;
+        }
+        (None, None) => {}
     }
     Ok(patch)
 }
@@ -287,9 +311,28 @@ mod tests {
     }
 
     #[test]
-    fn rate_sets_the_timestep() {
+    fn rate_sets_the_frame_rate() {
         let patch = parse("rate 48000\n").unwrap();
-        assert!((patch.config.dt - 1.0 / 48000.0).abs() < 1e-12);
+        assert_eq!(patch.config.sample_rate, 48000.0);
+        assert_eq!(patch.config.oversample, 1);
+    }
+
+    #[test]
+    fn dt_and_oversample_resolve_in_either_order() {
+        // dt is the integration step, so oversampling raises the frame rate to
+        // keep it, whichever line came first.
+        for text in ["dt 0.0005\noversample 4\n", "oversample 4\ndt 0.0005\n"] {
+            let config = parse(text).unwrap().config;
+            assert_eq!(config.oversample, 4);
+            assert!((config.dt() - 0.0005).abs() < 1e-9, "{text:?}");
+            assert!((config.sample_rate - 500.0).abs() < 1e-3, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn dt_and_rate_together_are_rejected() {
+        let err = parse("dt 0.0005\nrate 48000\n").unwrap_err();
+        assert!(err.message.contains("not both"), "{err}");
     }
 
     #[test]

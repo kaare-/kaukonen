@@ -7,7 +7,10 @@ impl std::fmt::Display for Patch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let d = PatchConfig::default();
         writeln!(f, "# kaukonen patch v1")?;
-        writeln!(f, "dt {}", trim_float(self.config.dt))?;
+        writeln!(f, "rate {}", trim_float(self.config.sample_rate))?;
+        if self.config.oversample != d.oversample {
+            writeln!(f, "oversample {}", self.config.oversample)?;
+        }
         if self.config.rail != d.rail {
             writeln!(f, "rail {}", trim_float(self.config.rail))?;
         }
@@ -133,7 +136,8 @@ record cells[*].v brain.activity *
     #[test]
     fn defaults_are_omitted() {
         let text = parse("module a rc1\n").unwrap().to_string();
-        assert!(text.contains("dt "));
+        assert!(text.contains("rate "));
+        assert!(!text.contains("oversample"));
         assert!(!text.contains("mismatch"));
         assert!(!text.contains("seconds"));
     }

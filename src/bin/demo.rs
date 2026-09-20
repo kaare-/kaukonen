@@ -89,8 +89,8 @@ fn main() {
     let mut engine = Engine::new(
         net,
         SimConfig {
-            dt: DEFAULT_DT,
             rail: 10.0,
+            ..SimConfig::control_rate()
         },
     );
     engine.run(5.0, &mut rec);

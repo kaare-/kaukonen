@@ -118,6 +118,10 @@ impl Network {
     }
 
     /// Zero every input buffer, then sum cables from the previous outputs.
+    ///
+    /// This treats every cable as delayed by one step. The engine uses
+    /// [`crate::schedule::Schedule`] instead, which only delays cables that
+    /// close a cycle; this stays as the simple reference behaviour.
     pub fn mix(&self, prev: &[ModuleOutputs]) -> Vec<[Volt; MAX_PORTS]> {
         let mut inputs = vec![[0.0; MAX_PORTS]; self.modules.len()];
         for cable in &self.cables {

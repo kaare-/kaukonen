@@ -13,7 +13,7 @@ use crate::module::{AnalogModule, Module};
 use crate::network::Network;
 use crate::param;
 use crate::rc1::{Rc1, Rc1Params};
-use crate::types::{InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL};
+use crate::types::{InstanceVariation, SimConfig, Volt, DEFAULT_RAIL, DEFAULT_SAMPLE_RATE};
 
 /// Which instances of a module a reference points at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,7 +99,10 @@ pub enum RecordDecl {
 /// Simulation settings a patch can set.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PatchConfig {
-    pub dt: f32,
+    /// Frames per second of simulated time.
+    pub sample_rate: f32,
+    /// Integration steps per frame.
+    pub oversample: u32,
     pub rail: Volt,
     /// Seed for per-instance component mismatch.
     pub seed: u64,
@@ -112,11 +115,27 @@ pub struct PatchConfig {
 impl Default for PatchConfig {
     fn default() -> Self {
         Self {
-            dt: DEFAULT_DT,
+            sample_rate: DEFAULT_SAMPLE_RATE,
+            oversample: 1,
             rail: DEFAULT_RAIL,
             seed: 0,
             mismatch: 0.0,
             seconds: 5.0,
+        }
+    }
+}
+
+impl PatchConfig {
+    /// The integration step handed to modules.
+    pub fn dt(&self) -> f32 {
+        self.sim().dt()
+    }
+
+    pub fn sim(&self) -> SimConfig {
+        SimConfig {
+            sample_rate: self.sample_rate,
+            oversample: self.oversample,
+            rail: self.rail,
         }
     }
 }
@@ -314,10 +333,7 @@ impl Patch {
 
         Ok(BuiltPatch {
             network,
-            config: SimConfig {
-                dt: self.config.dt,
-                rail: self.config.rail,
-            },
+            config: self.config.sim(),
             seconds: self.config.seconds,
             channels,
         })

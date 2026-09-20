@@ -16,6 +16,7 @@ pub mod patch;
 pub mod plasticity;
 pub mod rc1;
 pub mod record;
+pub mod schedule;
 pub mod source;
 pub mod tc3;
 pub mod types;
@@ -31,6 +32,9 @@ pub use patch::{BuiltPatch, Patch, PatchError};
 pub use plasticity::{Plasticity, PlasticityRule, Rule};
 pub use rc1::{Rc1, Rc1Params, Rc1State};
 pub use record::Recorder;
+pub use schedule::Schedule;
 pub use source::{Source, SourceKind, SourceParams};
 pub use tc3::{Tc3, Tc3Params, Tc3State};
-pub use types::{InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL};
+pub use types::{
+    InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL, DEFAULT_SAMPLE_RATE,
+};
