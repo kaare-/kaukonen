@@ -1,0 +1,47 @@
+# Neural CV driving the utility rack.
+#
+# Three mismatched RC-1 cells burst at their own paces. One fires the
+# envelope, one bends the oscillator, and all three sum into the filter
+# cutoff through a mixer, so the timbre drifts as the cells fall in and out
+# of step with each other. TC-3 watches them and reports its own plasticity.
+#
+# Gating from a single cell rather than the summed mixer is deliberate: the
+# cells desynchronise, and a sum of three spikes that no longer coincide
+# never clears a threshold.
+
+rate 48000
+oversample 2
+seconds 6
+seed 12
+mismatch 0.04
+
+module cells rc1[3] preset=burst rate=150 noise=0.01
+module brain tc3    rule=oja gamma=0.6 scaling=0.4 target_norm=1.2 activity_gain=0.02
+module blend mix    a0=0.4 a1=0.4 a2=0.4 a3=0 offset=2.5 level=0.5
+module gate  env    mode=ad attack=0.004 decay=0.22 threshold=1.5
+module osc   vco    tune=110 fm_depth=30
+module filt  vcf    cutoff=260 resonance=1.05 cv_depth=1.1 drive=1.6
+module amp   vca    response=exponential cv_depth=1
+module dac   audioout rate=48000 level=0.28
+
+# The connectome watches all three cells and gates its own learning.
+patch cells[*].out   -> brain.a
+patch brain.activity -> brain.learn
+
+# One cell fires the envelope; a threshold one cell can clear alone.
+patch cells[0].out -> gate.gate
+
+# All three sum into the filter, so the timbre follows their drifting phases.
+patch cells[0].out -> blend.in0
+patch cells[1].out -> blend.in1
+patch cells[2].out -> blend.in2
+patch blend.out -> filt.cutoff_cv
+
+patch cells[1].out -> osc.fm
+patch osc.saw   -> filt.in
+patch filt.out  -> amp.in
+patch gate.out  -> amp.cv
+patch amp.out   -> dac.left
+patch amp.out   -> dac.right
+
+record cells[*].v brain.w00 brain.norm brain.activity blend.out gate.out amp.gain

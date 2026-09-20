@@ -102,7 +102,12 @@ impl AnalogModule for Env {
     }
 
     fn read_state(&self, out: &mut [Volt]) {
-        let values = [self.value, if self.falling { 1.0 } else { 0.0 }];
+        // Report the jack voltage, not the internal 0..1 envelope, so
+        // `record env.out` means the same thing as the cable carries.
+        let values = [
+            self.level * self.value,
+            if self.falling { 1.0 } else { 0.0 },
+        ];
         for (slot, value) in out.iter_mut().zip(values) {
             *slot = value;
         }
@@ -247,6 +252,19 @@ mod tests {
         assert_eq!(*weak.last().unwrap(), 0.0, "2 V opened a 3 V gate");
         let strong = trace(&mut env, 4.0, 0.1);
         assert!(*strong.last().unwrap() > 4.9, "4 V did not open it");
+    }
+
+    #[test]
+    fn the_recorded_state_matches_the_jack() {
+        let mut env = env(1.0, 0.001, 10.0);
+        let out = trace(&mut env, 5.0, 0.05);
+        let jack = *out.last().unwrap();
+        assert!(jack > 4.9, "jack {jack}");
+        assert!(
+            (env.snapshot()[0].1 - jack).abs() < 1e-6,
+            "state says {} but the jack carries {jack}",
+            env.snapshot()[0].1
+        );
     }
 
     #[test]

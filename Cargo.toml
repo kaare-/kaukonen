@@ -13,3 +13,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "demo"
 path = "src/bin/demo.rs"
+
+[[bin]]
+name = "kaukonen"
+path = "src/bin/kaukonen.rs"
