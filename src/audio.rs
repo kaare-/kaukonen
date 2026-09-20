@@ -42,6 +42,8 @@ pub struct AudioIn {
     pub ending: usize,
     pub env_rate: f32,
     audio: Audio,
+    /// A sample pushed by a live host, which overrides the file for one step.
+    live: Option<f32>,
     /// Playback position in frames of the source file.
     position: f32,
     last: Volt,
@@ -56,6 +58,7 @@ impl AudioIn {
             ending: 0,
             env_rate: 20.0,
             audio: Audio::default(),
+            live: None,
             position: 0.0,
             last: 0.0,
             env: 0.0,
@@ -65,7 +68,22 @@ impl AudioIn {
     /// Hand this module the sound it should play.
     pub fn load(&mut self, audio: Audio) {
         self.audio = audio;
+        self.live = None;
         self.position = 0.0;
+    }
+
+    /// Feed one sample from a live source, for the current step only.
+    ///
+    /// A live stream has no file to seek through, so this overrides playback
+    /// rather than buffering: the host sets a sample, the engine takes a step,
+    /// and no memory grows.
+    pub fn set_live(&mut self, sample: f32) {
+        self.live = Some(sample);
+    }
+
+    /// Go back to playing the loaded file.
+    pub fn clear_live(&mut self) {
+        self.live = None;
     }
 
     pub fn audio(&self) -> &Audio {
@@ -78,6 +96,9 @@ impl AudioIn {
 
     /// Linearly interpolated source sample at the current position.
     fn read(&self) -> f32 {
+        if let Some(sample) = self.live {
+            return sample;
+        }
         let frames = self.audio.frames();
         if frames == 0 {
             return 0.0;
@@ -205,6 +226,8 @@ pub struct AudioOut {
     filter: [[f32; 2]; 2],
     /// Fractional output samples owed.
     phase: f32,
+    /// Whether to collect a file. A live host turns this off.
+    capturing: bool,
     last: [Volt; 2],
     peak: f32,
 }
@@ -225,6 +248,7 @@ impl AudioOut {
             right: Vec::new(),
             filter: [[0.0; 2]; 2],
             phase: 0.0,
+            capturing: true,
             last: [0.0; 2],
             peak: 0.0,
         }
@@ -250,6 +274,31 @@ impl AudioOut {
         self.right.clear();
         self.phase = 0.0;
         self.peak = 0.0;
+    }
+
+    /// Stop collecting a file, for a host that reads every frame as it goes.
+    ///
+    /// A live stream runs indefinitely, so a growing capture buffer would be a
+    /// leak with a long fuse.
+    pub fn set_capturing(&mut self, capturing: bool) {
+        self.capturing = capturing;
+    }
+
+    pub fn is_capturing(&self) -> bool {
+        self.capturing
+    }
+
+    /// The converter's current output, filtered and clipped exactly as a
+    /// captured frame would be, without buffering anything.
+    ///
+    /// This is what a real-time host reads. It is only the right value when the
+    /// engine's frame rate matches the host's, which is the arrangement that
+    /// needs no resampling on either side.
+    pub fn current_frame(&self) -> (f32, f32) {
+        (
+            soft_clip(self.filter[0][1], self.headroom, CLIP_KNEE),
+            soft_clip(self.filter[1][1], self.headroom, CLIP_KNEE),
+        )
     }
 }
 
@@ -320,10 +369,12 @@ impl AnalogModule for AudioOut {
         while self.phase >= 1.0 {
             self.phase -= 1.0;
             self.peak = self.peak.max(scaled[0].abs()).max(scaled[1].abs());
-            self.left
-                .push(soft_clip(scaled[0], self.headroom, CLIP_KNEE));
-            self.right
-                .push(soft_clip(scaled[1], self.headroom, CLIP_KNEE));
+            if self.capturing {
+                self.left
+                    .push(soft_clip(scaled[0], self.headroom, CLIP_KNEE));
+                self.right
+                    .push(soft_clip(scaled[1], self.headroom, CLIP_KNEE));
+            }
         }
 
         let mix = 0.5 * (left + right);

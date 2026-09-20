@@ -121,6 +121,12 @@ designed around. Audio rate is something a patch opts into with `rate 48000`,
 and each module has a `rate` knob spanning biological to audible, so one RC-1
 can burst over seconds while another oscillates at 300 Hz in the same rack.
 
+For live playback, `Stream::process` fills a host buffer without allocating or
+locking, and produces the same audio as the offline render. There is no audio
+backend here: [`docs/realtime.md`](docs/realtime.md) has the dozen lines of cpal
+glue, and `bench --block 256` reports worst-case headroom against the deadline,
+since an average faster than real time is not enough to avoid dropouts.
+
 ## Physical imperfection
 
 Off by default, so an ideal rack is exactly reproducible.

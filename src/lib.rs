@@ -21,6 +21,7 @@ pub mod render;
 pub mod schedule;
 pub mod scope;
 pub mod source;
+pub mod stream;
 pub mod tc3;
 pub mod types;
 pub mod util;
@@ -42,6 +43,7 @@ pub use render::{render, RenderOptions, RenderReport};
 pub use schedule::Schedule;
 pub use scope::Scope;
 pub use source::{Source, SourceKind, SourceParams};
+pub use stream::Stream;
 pub use tc3::{Tc3, Tc3Params, Tc3State};
 pub use types::{
     InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL, DEFAULT_SAMPLE_RATE,

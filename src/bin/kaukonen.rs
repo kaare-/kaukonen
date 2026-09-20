@@ -7,6 +7,7 @@ use kaukonen::patch::{self, Patch};
 use kaukonen::render::{render, RenderOptions};
 use kaukonen::schedule::Schedule;
 use kaukonen::scope::Scope;
+use kaukonen::stream::Stream;
 use kaukonen::wav::{Audio, SampleFormat};
 use kaukonen::{Module, Recorder};
 use std::collections::BTreeMap;
@@ -464,7 +465,7 @@ fn cmd_sweep(args: &Args) -> Result<(), String> {
 }
 
 fn cmd_bench(args: &Args) -> Result<(), String> {
-    args.reject_unknown(&["patch", "seconds"])?;
+    args.reject_unknown(&["patch", "seconds", "block"])?;
     let source = args.require("patch")?;
     let patch = load(source)?;
     let built = patch.build().map_err(|e| format!("{source}: {e}"))?;
@@ -508,6 +509,49 @@ fn cmd_bench(args: &Args) -> Result<(), String> {
             elapsed * 1e9 / module_steps
         );
     }
+
+    // An average faster than real time is not enough to stream without
+    // glitching: one block that misses its deadline is an audible dropout.
+    let block = args.get_usize("block")?.unwrap_or(256).max(1);
+    let rebuilt = load(source)?
+        .build()
+        .map_err(|e| format!("{source}: {e}"))?;
+    let mut stream = Stream::new(rebuilt);
+    if !stream.has_output() {
+        println!("  (no audioout, so there is nothing to stream)");
+        return Ok(());
+    }
+    let mut buffer = vec![0.0f32; block * 2];
+    let deadline = block as f64 / config.sample_rate as f64;
+    let blocks = ((seconds as f64 / deadline) as usize).max(1);
+    // One block first, so a cold cache is not counted as jitter.
+    stream.process(&mut buffer, 2);
+    let mut total = 0.0;
+    let mut worst = 0.0f64;
+    for _ in 0..blocks {
+        let start = Instant::now();
+        stream.process(&mut buffer, 2);
+        let taken = start.elapsed().as_secs_f64();
+        total += taken;
+        worst = worst.max(taken);
+    }
+    println!(
+        "  streaming {block}-frame blocks: {:.1} us deadline, {:.1} us mean, {:.1} us worst",
+        deadline * 1e6,
+        total / blocks as f64 * 1e6,
+        worst * 1e6
+    );
+    let headroom = deadline / worst.max(1e-12);
+    println!(
+        "  worst-case headroom x{headroom:.2}{}",
+        if headroom < 1.0 {
+            "  (would drop out)"
+        } else if headroom < 2.0 {
+            "  (tight)"
+        } else {
+            ""
+        }
+    );
     Ok(())
 }
 
