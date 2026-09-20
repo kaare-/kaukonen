@@ -2,6 +2,7 @@
 
 use crate::integrate::leaky_integrate;
 use crate::module::{AnalogModule, ModuleOutputs};
+use crate::noise::{ou_increment, Rng};
 use crate::nonlinearity::Nonlinearity;
 use crate::param::{self, params, ParamError, ParamSpec, Unit};
 use crate::types::{clamp_rail, InstanceVariation, Volt, DEFAULT_RAIL};
@@ -21,7 +22,7 @@ const PARAMS: &[ParamSpec] = params! {
     "shape", Unit::Enum(Nonlinearity::SHAPES), 0.0 ..= 2.0, 0.0, Linear, "saturation curve";
     "response", Unit::Ratio, 0.01 ..= 20.0, 0.6, Log, "slope into the saturation curve";
     "asym", Unit::Ratio, 0.05 ..= 20.0, 1.0, Log, "negative-slope ratio; 1.0 is symmetric";
-    "noise", Unit::Volt, 0.0 ..= 1.0, 0.0, Linear, "thermal noise RMS injected into the membrane";
+    "noise", Unit::Volt, 0.0 ..= 1.0, 0.0, Linear, "RMS of the thermal fluctuation on the membrane, independent of dt";
 };
 
 /// Knob / component characteristics.
@@ -57,6 +58,14 @@ impl NeuronParams {
         self.bias += variation.offset(10);
         self.leak = variation.scale_param(11, self.leak).max(0.0);
         self.gain = variation.scale_param(12, self.gain);
+        // Saturation is a component characteristic too, so no two neurons
+        // clip at quite the same place. The asymmetry only bites on a shape
+        // that has separate slopes to begin with.
+        self.nonlinearity = Nonlinearity::from_parts(
+            self.nonlinearity.shape(),
+            variation.scale_param(13, self.nonlinearity.response()),
+            variation.scale_param(14, self.nonlinearity.asymmetry()),
+        );
         self
     }
 }
@@ -72,6 +81,7 @@ pub struct NeuronState {
 pub struct Neuron {
     pub params: NeuronParams,
     pub state: NeuronState,
+    rng: Rng,
 }
 
 impl Neuron {
@@ -83,6 +93,7 @@ impl Neuron {
         Self {
             params: params.vary(variation),
             state: NeuronState::default(),
+            rng: Rng::new(variation.seed),
         }
     }
 
@@ -160,6 +171,9 @@ impl AnalogModule for Neuron {
 
     fn apply_variation(&mut self, variation: InstanceVariation) {
         self.params = self.params.vary(variation);
+        // Reseeded even when tolerance is zero, so identical modules still
+        // have independent noise streams.
+        self.rng = Rng::new(variation.seed);
     }
 
     fn read_state(&self, out: &mut [Volt]) {
@@ -171,6 +185,7 @@ impl AnalogModule for Neuron {
     fn step(&mut self, inputs: &[Volt], dt: f32) -> ModuleOutputs {
         let drive = self.drive(inputs);
         self.state.v = leaky_integrate(self.state.v, drive, self.params.leak, dt);
+        self.state.v += ou_increment(&mut self.rng, self.params.noise, self.params.leak, dt);
         self.state.v = clamp_rail(self.state.v, DEFAULT_RAIL);
         let out = self.params.gain * self.params.nonlinearity.apply(self.state.v);
         ModuleOutputs::one(clamp_rail(out, DEFAULT_RAIL))
@@ -240,6 +255,83 @@ mod tests {
             }
             other => panic!("expected asym_tanh, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn noise_holds_its_rms_whatever_the_timestep() {
+        for dt in [0.001, 0.00025] {
+            let mut n = Neuron::instantiate(
+                NeuronParams {
+                    weights: [0.0; 4],
+                    leak: 20.0,
+                    noise: 0.08,
+                    ..NeuronParams::default()
+                },
+                InstanceVariation::new(5, 0.0),
+            );
+            let steps = (30.0 / dt) as usize;
+            let mut samples = Vec::new();
+            for i in 0..steps {
+                n.step(&[0.0; 4], dt);
+                if i > steps / 10 {
+                    samples.push(n.state.v);
+                }
+            }
+            let mean = samples.iter().sum::<f32>() / samples.len() as f32;
+            let std = (samples.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>()
+                / samples.len() as f32)
+                .sqrt();
+            assert!((std - 0.08).abs() < 0.012, "dt={dt} gave RMS {std}");
+        }
+    }
+
+    #[test]
+    fn silent_neurons_stay_exactly_deterministic() {
+        let run = || {
+            let mut n =
+                Neuron::instantiate(NeuronParams::default(), InstanceVariation::new(3, 0.0));
+            (0..500)
+                .map(|_| n.step(&[0.4; 4], 0.0005)[0])
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(run(), run());
+    }
+
+    #[test]
+    fn instances_get_independent_noise_streams() {
+        let params = NeuronParams {
+            weights: [0.0; 4],
+            noise: 0.05,
+            ..NeuronParams::default()
+        };
+        let mut a = Neuron::instantiate(params, InstanceVariation::new(1, 0.0));
+        let mut b = Neuron::instantiate(params, InstanceVariation::new(2, 0.0));
+        let mut differed = false;
+        for _ in 0..200 {
+            let x = a.step(&[0.0; 4], 0.0005)[0];
+            let y = b.step(&[0.0; 4], 0.0005)[0];
+            differed |= (x - y).abs() > 1e-9;
+        }
+        assert!(differed, "two seeds produced the same noise");
+    }
+
+    #[test]
+    fn mismatch_individualizes_the_saturation() {
+        let params = NeuronParams {
+            nonlinearity: Nonlinearity::AsymTanh { pos: 1.0, neg: 0.5 },
+            ..NeuronParams::default()
+        };
+        let a = Neuron::instantiate(params, InstanceVariation::new(1, 0.1));
+        let b = Neuron::instantiate(params, InstanceVariation::new(2, 0.1));
+        assert_ne!(
+            a.params.nonlinearity.asymmetry(),
+            b.params.nonlinearity.asymmetry()
+        );
+        assert_eq!(
+            a.params.nonlinearity.shape(),
+            2,
+            "shape must survive mismatch"
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use crate::integrate::leaky_integrate;
 use crate::module::{AnalogModule, ModuleOutputs};
+use crate::noise::{ou_increment, Rng};
 use crate::param::{self, params, ParamError, ParamSpec, Unit};
 use crate::plasticity::{Plasticity, PlasticityRule};
 use crate::types::{clamp_rail, InstanceVariation, Volt, DEFAULT_RAIL};
@@ -17,7 +18,7 @@ const PARAMS: &[ParamSpec] = params! {
     "w_min", Unit::Ratio, -10.0 ..= 0.0, -2.0, Linear, "lower end stop of the analog weight memory";
     "w_max", Unit::Ratio, 0.0 ..= 10.0, 2.0, Linear, "upper end stop of the analog weight memory";
     "activity_gain", Unit::Ratio, 0.0 ..= 10.0, 0.05, Linear, "scales the sum of |dw/dt| into the ACTIVITY jack";
-    "drift", Unit::Ratio, 0.0 ..= 1.0, 0.0, Linear, "slow random-walk drift rate on stored weights";
+    "drift", Unit::Ratio, 0.0 ..= 1.0, 0.0, Linear, "RMS wander of each stored weight, held in check by natural_decay";
     "rule", Unit::Enum(Plasticity::RULES), 0.0 ..= 0.0, 0.0, Linear, "local plasticity rule";
     "deadzone", Unit::Ratio, 0.0 ..= 1.0, 0.0001, Linear, "ignore input*output products below this magnitude";
 };
@@ -30,8 +31,8 @@ pub struct Tc3Params {
     /// Scales Σ|dw/dt| into a patchable voltage.
     pub activity_gain: f32,
     pub plasticity: Plasticity,
-    /// Slow random-walk drift rate on stored weights. Zero means a
-    /// mathematically ideal memory.
+    /// RMS wander of each stored weight. Zero means a mathematically ideal
+    /// memory; anything else makes the connectome slowly forget where it was.
     pub drift: f32,
 }
 
@@ -51,6 +52,10 @@ impl Default for Tc3Params {
 impl Tc3Params {
     pub fn vary(mut self, variation: InstanceVariation) -> Self {
         self.natural_decay = variation.scale_param(1, self.natural_decay).max(0.0);
+        self.activity_gain = variation.scale_param(2, self.activity_gain);
+        // Even the end stops of an analog memory are a component tolerance.
+        self.w_max = variation.scale_param(3, self.w_max);
+        self.w_min = variation.scale_param(4, self.w_min);
         self
     }
 }
@@ -74,6 +79,7 @@ impl Default for Tc3State {
 pub struct Tc3 {
     pub params: Tc3Params,
     pub state: Tc3State,
+    rng: Rng,
 }
 
 impl Tc3 {
@@ -93,6 +99,7 @@ impl Tc3 {
         Self {
             params: params.vary(variation),
             state,
+            rng: Rng::new(variation.seed),
         }
     }
 
@@ -194,15 +201,19 @@ impl AnalogModule for Tc3 {
         let outs = self.mix(ins);
 
         let p = self.params;
+        let rng = &mut self.rng;
         let mut activity = 0.0;
         for (input, row) in ins.iter().zip(&mut self.state.weights) {
             for (output, w) in outs.iter().zip(row.iter_mut()) {
                 let plastic = p.plasticity.dw(*input, *output, *w, learn, forget);
                 let dw = plastic - p.natural_decay * *w;
                 activity += dw.abs();
-                // Exact leak toward the instantaneous plastic drive.
+                // Exact leak toward the instantaneous plastic drive, then the
+                // memory's own imperfection on top. The decay is already the
+                // relaxation that keeps the wander bounded.
                 let next = leaky_integrate(*w, plastic, p.natural_decay, dt);
-                *w = next.clamp(p.w_min, p.w_max);
+                let wander = ou_increment(rng, p.drift, p.natural_decay, dt);
+                *w = (next + wander).clamp(p.w_min, p.w_max);
             }
         }
         let activity_v = clamp_rail(p.activity_gain * activity, DEFAULT_RAIL);
@@ -273,6 +284,45 @@ mod tests {
         let snapshot = m.snapshot();
         let w12 = snapshot.iter().find(|(k, _)| *k == "w12").unwrap().1;
         assert!((w12 - 0.77).abs() < 1e-6);
+    }
+
+    #[test]
+    fn drift_makes_the_memory_wander_and_zero_holds_it() {
+        let quiet = |drift| Tc3Params {
+            natural_decay: 0.5,
+            drift,
+            ..Tc3Params::default()
+        };
+        let mut ideal = Tc3::instantiate(quiet(0.0), InstanceVariation::new(2, 0.0));
+        let mut drifting = Tc3::instantiate(quiet(0.3), InstanceVariation::new(2, 0.0));
+        let start = ideal.state.weights[0][0];
+        let mut wander: f32 = 0.0;
+        for _ in 0..40_000 {
+            // No inputs, so nothing but decay and imperfection moves a weight.
+            ideal.step(&[0.0; 5], 0.0005);
+            drifting.step(&[0.0; 5], 0.0005);
+            wander = wander.max((drifting.state.weights[0][0] - ideal.state.weights[0][0]).abs());
+        }
+        assert!(
+            ideal.state.weights[0][0].abs() < 1e-3,
+            "ideal weight should have decayed to zero from {start}, got {}",
+            ideal.state.weights[0][0]
+        );
+        assert!(wander > 0.05, "memory barely drifted: {wander}");
+        assert!(
+            drifting.state.weights[0][0].abs() < drifting.params.w_max,
+            "drift pinned the weight at its end stop"
+        );
+    }
+
+    #[test]
+    fn mismatch_individualizes_the_end_stops() {
+        let a = Tc3::instantiate(Tc3Params::default(), InstanceVariation::new(1, 0.1));
+        let b = Tc3::instantiate(Tc3Params::default(), InstanceVariation::new(2, 0.1));
+        assert_ne!(a.params.w_max, b.params.w_max);
+        assert_ne!(a.state.weights[0][0], b.state.weights[0][0]);
+        let ideal = Tc3::instantiate(Tc3Params::default(), InstanceVariation::new(1, 0.0));
+        assert_eq!(ideal.params.w_max, Tc3Params::default().w_max);
     }
 
     #[test]

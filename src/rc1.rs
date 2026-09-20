@@ -6,12 +6,13 @@
 
 use crate::integrate::softplus;
 use crate::module::{AnalogModule, ModuleOutputs};
+use crate::noise::{ou_increment, ou_step, Rng};
 use crate::param::{self, params, ParamError, ParamSpec, Unit};
 use crate::types::{clamp_rail, InstanceVariation, Volt, DEFAULT_RAIL};
 
 const IN_JACKS: &[&str] = &["in"];
 const OUT_JACKS: &[&str] = &["out"];
-const STATE_FIELDS: &[&str] = &["v", "r", "s"];
+const STATE_FIELDS: &[&str] = &["v", "r", "s", "drift"];
 
 const PARAMS: &[ParamSpec] = params! {
     "capacitance", Unit::Ratio, 0.01 ..= 100.0, 1.0, Log, "effective capacitance; larger is a slower membrane";
@@ -28,7 +29,8 @@ const PARAMS: &[ParamSpec] = params! {
     "output_gain", Unit::Ratio, 0.0 ..= 10.0, 5.0, Linear, "output scale after saturation";
     "rate", Unit::Ratio, 0.01 ..= 20000.0, 80.0, Log, "model time per second of wall clock; raise into the thousands to hear the cell";
     "bias", Unit::Volt, -10.0 ..= 10.0, 2.0, Linear, "constant bias current";
-    "noise", Unit::Volt, 0.0 ..= 1.0, 0.0, Linear, "thermal noise RMS injected into the membrane";
+    "noise", Unit::Volt, 0.0 ..= 1.0, 0.0, Linear, "RMS of the thermal fluctuation on the membrane, independent of dt";
+    "drift", Unit::Volt, 0.0 ..= 1.0, 0.0, Linear, "RMS of the slow wander of the threshold, on the adaptation timescale";
 };
 
 /// Knob / component characteristics.
@@ -63,6 +65,10 @@ pub struct Rc1Params {
     pub bias: f32,
     /// Thermal noise RMS in volts. Zero means a mathematically ideal module.
     pub noise: f32,
+    /// RMS of the slow wander of `threshold`. Zero holds the panel setting
+    /// exactly; a small value is what puts a cell in and out of its
+    /// near-threshold region over minutes.
+    pub drift: f32,
 }
 
 impl Default for Rc1Params {
@@ -112,6 +118,7 @@ impl Rc1Params {
             rate: 80.0,
             bias: 0.0,
             noise: 0.0,
+            drift: 0.0,
         }
     }
 
@@ -149,6 +156,9 @@ impl Rc1Params {
         self.sharpness = variation.scale_param(2, self.sharpness);
         self.adaptation_rate = variation.scale_param(3, self.adaptation_rate).max(1e-6);
         self.bias += variation.offset(4) * 0.05;
+        self.capacitance = variation.scale_param(5, self.capacitance).max(1e-4);
+        self.recovery_rate = variation.scale_param(6, self.recovery_rate).max(0.0);
+        self.output_gain = variation.scale_param(7, self.output_gain);
         self
     }
 }
@@ -158,6 +168,8 @@ pub struct Rc1State {
     pub v: Volt,
     pub r: Volt,
     pub s: Volt,
+    /// Accumulated slow wander added to the threshold knob.
+    pub drift: Volt,
 }
 
 impl Default for Rc1State {
@@ -173,6 +185,7 @@ impl Rc1State {
             v,
             r: 1.0 - recovery_drive * v * v,
             s: adaptation_depth * (v - threshold),
+            drift: 0.0,
         }
     }
 }
@@ -181,6 +194,7 @@ impl Rc1State {
 pub struct Rc1 {
     pub params: Rc1Params,
     pub state: Rc1State,
+    rng: Rng,
 }
 
 impl Default for Rc1 {
@@ -202,7 +216,16 @@ impl Rc1 {
             params.adaptation_depth,
             params.threshold,
         );
-        Self { params, state }
+        Self {
+            params,
+            state,
+            rng: Rng::new(variation.seed),
+        }
+    }
+
+    /// Threshold actually in force, including any accumulated drift.
+    pub fn effective_threshold(&self) -> Volt {
+        self.params.threshold + self.state.drift
     }
 
     fn derivatives(&self, v: f32, r: f32, s: f32, i_in: f32) -> (f32, f32, f32) {
@@ -216,7 +239,7 @@ impl Rc1 {
         // `discharge` scales the recovery contribution (1.0 = standard HR).
         let dv = (p.discharge * r + exc - s + drive - p.leak * v) / c;
         let dr = p.recovery_rate * (1.0 - p.recovery_drive * v * v - r);
-        let ds = p.adaptation_rate * (p.adaptation_depth * (v - p.threshold) - s);
+        let ds = p.adaptation_rate * (p.adaptation_depth * (v - self.effective_threshold()) - s);
         (dv, dr, ds)
     }
 
@@ -273,6 +296,7 @@ impl AnalogModule for Rc1 {
             "rate" => p.rate,
             "bias" => p.bias,
             "noise" => p.noise,
+            "drift" => p.drift,
             _ => return None,
         })
     }
@@ -297,6 +321,7 @@ impl AnalogModule for Rc1 {
             "rate" => p.rate = v,
             "bias" => p.bias = v,
             "noise" => p.noise = v,
+            "drift" => p.drift = v,
             _ => return Err(self.unknown_param(name)),
         }
         Ok(())
@@ -311,7 +336,7 @@ impl AnalogModule for Rc1 {
     }
 
     fn read_state(&self, out: &mut [Volt]) {
-        let values = [self.state.v, self.state.r, self.state.s];
+        let values = [self.state.v, self.state.r, self.state.s, self.state.drift];
         for (slot, value) in out.iter_mut().zip(values) {
             *slot = value;
         }
@@ -321,6 +346,22 @@ impl AnalogModule for Rc1 {
         let i_in = inputs.first().copied().unwrap_or(0.0);
         let dt_model = dt * self.params.rate;
         self.rk2_step(i_in, dt_model);
+        // Recovery sets how fast the membrane is pulled back, so it is the
+        // relaxation the thermal fluctuation has to push against.
+        self.state.v += ou_increment(
+            &mut self.rng,
+            self.params.noise,
+            self.params.recovery_rate,
+            dt_model,
+        );
+        // The threshold wanders on the slowest timescale the cell has.
+        self.state.drift = ou_step(
+            &mut self.rng,
+            self.state.drift,
+            self.params.drift,
+            self.params.adaptation_rate,
+            dt_model,
+        );
         let out = self.params.output_gain * self.state.v.tanh();
         ModuleOutputs::one(clamp_rail(out, DEFAULT_RAIL))
     }
@@ -465,6 +506,88 @@ mod tests {
             "rate did not speed the cell up: {} vs {}",
             slow.1.len(),
             fast.1.len()
+        );
+    }
+
+    /// Upward zero crossings of a freely running cell.
+    fn spike_count(params: Rc1Params, variation: InstanceVariation, seconds: f32) -> usize {
+        let mut cell = Rc1::instantiate(params, variation);
+        let dt = 0.0005;
+        let mut spikes = 0;
+        let mut prev = cell.state.v;
+        for _ in 0..(seconds / dt) as usize {
+            cell.step(&[0.0], dt);
+            if prev < 0.0 && cell.state.v >= 0.0 {
+                spikes += 1;
+            }
+            prev = cell.state.v;
+        }
+        spikes
+    }
+
+    #[test]
+    fn noise_pushes_a_resting_cell_over_threshold() {
+        // Near-threshold instability: silent when ideal, firing once thermal
+        // noise is on, with nothing else on the panel changed.
+        let quiet = Rc1Params {
+            bias: 0.1,
+            ..Rc1Params::subthreshold()
+        };
+        let ideal = InstanceVariation::new(1, 0.0);
+        assert_eq!(spike_count(quiet, ideal, 8.0), 0, "ideal cell fired");
+        for seed in [1, 32, 63, 94] {
+            let spikes = spike_count(
+                Rc1Params {
+                    noise: 0.6,
+                    ..quiet
+                },
+                InstanceVariation::new(seed, 0.0),
+                8.0,
+            );
+            assert!(spikes > 0, "seed {seed} never crossed threshold");
+        }
+    }
+
+    #[test]
+    fn drift_wanders_the_threshold_and_zero_holds_it() {
+        let dt = 0.0005;
+        let mut ideal = Rc1::instantiate(Rc1Params::burst(), InstanceVariation::new(1, 0.0));
+        let mut drifting = Rc1::instantiate(
+            Rc1Params {
+                drift: 0.2,
+                ..Rc1Params::burst()
+            },
+            InstanceVariation::new(1, 0.0),
+        );
+        let mut spread: f32 = 0.0;
+        for _ in 0..(20.0 / dt) as usize {
+            ideal.step(&[0.0], dt);
+            drifting.step(&[0.0], dt);
+            spread = spread.max(drifting.state.drift.abs());
+        }
+        assert_eq!(ideal.state.drift, 0.0, "an ideal threshold must not move");
+        assert_eq!(ideal.effective_threshold(), ideal.params.threshold);
+        assert!(spread > 0.02, "threshold barely moved: {spread}");
+        assert!(spread < 1.0, "threshold ran away: {spread}");
+    }
+
+    #[test]
+    fn mismatch_spreads_a_bank_of_nominally_identical_cells() {
+        // No noise, so any spread comes purely from component tolerance.
+        let counts: Vec<usize> = (0..8)
+            .map(|seed| spike_count(Rc1Params::tonic(), InstanceVariation::new(seed, 0.08), 3.0))
+            .collect();
+        let min = counts.iter().copied().min().unwrap();
+        let max = counts.iter().copied().max().unwrap();
+        assert!(min > 0, "some cell went silent: {counts:?}");
+        assert!(max > min, "mismatch produced identical cells: {counts:?}");
+
+        let ideal: Vec<usize> = (0..4)
+            .map(|seed| spike_count(Rc1Params::tonic(), InstanceVariation::new(seed, 0.0), 3.0))
+            .collect();
+        assert!(
+            ideal.iter().all(|n| *n == ideal[0]),
+            "ideal modules should be identical: {ideal:?}"
         );
     }
 

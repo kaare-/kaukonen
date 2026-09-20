@@ -542,11 +542,56 @@ record cells[*].v brain.w00 brain.activity
         assert_ne!(read(&varied, "cells[0]"), read(&varied, "cells[1]"));
     }
 
+    /// Membrane trace of every cell in a noisy bank.
+    fn noisy_run(text: &str) -> Vec<f32> {
+        use crate::engine::Engine;
+        let built = parse(text).unwrap().build().unwrap();
+        let mut engine = Engine::new(built.network, built.config);
+        let mut trace = Vec::new();
+        for _ in 0..500 {
+            engine.step();
+            for channel in &built.channels {
+                trace.push(engine.lookup_channel(channel).unwrap());
+            }
+        }
+        trace
+    }
+
+    #[test]
+    fn noisy_patches_are_reproducible_and_seed_sensitive() {
+        let text = "\
+            seed 11\n\
+            mismatch 0.05\n\
+            module cells rc1[4] preset=tonic noise=0.2 drift=0.05\n\
+            record cells[*].v\n";
+        assert_eq!(noisy_run(text), noisy_run(text), "same seed must repeat");
+        let other = text.replace("seed 11", "seed 12");
+        assert_ne!(noisy_run(text), noisy_run(&other), "seed had no effect");
+    }
+
+    #[test]
+    fn instances_in_a_bank_do_not_share_a_noise_stream() {
+        let built = parse("module cells rc1[2] preset=tonic noise=0.3\nrecord cells[*].v\n")
+            .unwrap()
+            .build()
+            .unwrap();
+        let mut engine = crate::engine::Engine::new(built.network, built.config);
+        let mut differed = false;
+        for _ in 0..500 {
+            engine.step();
+            let a = engine.lookup_channel("cells[0].v").unwrap();
+            let b = engine.lookup_channel("cells[1].v").unwrap();
+            differed |= (a - b).abs() > 1e-9;
+        }
+        assert!(differed, "both cells drew the same noise");
+    }
+
     #[test]
     fn record_everything_covers_every_state() {
         let patch = parse("module cells rc1[3]\nrecord *\n").unwrap();
         let built = patch.build().unwrap();
-        assert_eq!(built.channels.len(), 9);
+        // Three cells, each reporting v, r, s and drift.
+        assert_eq!(built.channels.len(), 12);
         assert!(built.channels.contains(&"cells[2].s".to_string()));
     }
 
