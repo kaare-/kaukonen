@@ -209,7 +209,7 @@ impl AnalogModule for Source {
         let v = param::checked(spec, value)?;
         let p = &mut self.params;
         match name {
-            "shape" => p.shape = v as usize,
+            "shape" => p.shape = param::choice(v),
             "volts" => p.volts = v,
             "freq" => p.freq = v,
             "amp" => p.amp = v,

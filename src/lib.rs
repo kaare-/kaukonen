@@ -28,7 +28,7 @@ pub use noise::Rng;
 pub use nonlinearity::Nonlinearity;
 pub use param::{ParamError, ParamSpec, Taper, Unit};
 pub use patch::{BuiltPatch, Patch, PatchError};
-pub use plasticity::{Hebbian, Plasticity, PlasticityRule};
+pub use plasticity::{Plasticity, PlasticityRule, Rule};
 pub use rc1::{Rc1, Rc1Params, Rc1State};
 pub use record::Recorder;
 pub use source::{Source, SourceKind, SourceParams};

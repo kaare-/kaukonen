@@ -271,7 +271,7 @@ mod tests {
                     .unwrap_or_else(|e| panic!("{name}.{}: {e}", spec.name));
                 let got = m.get_param(spec.name).expect("readable");
                 let expected = if spec.choices().is_some() {
-                    mid.round()
+                    crate::param::choice(mid) as f32
                 } else {
                     mid
                 };

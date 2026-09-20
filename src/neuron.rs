@@ -155,7 +155,8 @@ impl AnalogModule for Neuron {
             "leak" => self.params.leak = v,
             "gain" => self.params.gain = v,
             "shape" => {
-                self.params.nonlinearity = Nonlinearity::from_parts(v as usize, response, asym)
+                self.params.nonlinearity =
+                    Nonlinearity::from_parts(param::choice(v), response, asym)
             }
             "response" => self.params.nonlinearity = Nonlinearity::from_parts(shape, v, asym),
             "asym" => self.params.nonlinearity = Nonlinearity::from_parts(shape, response, v),

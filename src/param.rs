@@ -141,7 +141,7 @@ impl ParamSpec {
     pub fn format(&self, value: f32) -> String {
         match self.choices() {
             Some(choices) => {
-                let i = (value.max(0.0) as usize).min(choices.len().saturating_sub(1));
+                let i = choice(value).min(choices.len().saturating_sub(1));
                 choices[i].to_string()
             }
             None => format!("{}{}", trim_float(value), self.unit.suffix()),
@@ -225,6 +225,18 @@ impl std::error::Error for ParamError {}
 /// Look up a spec by name in a module's knob list.
 pub fn find_spec(specs: &'static [ParamSpec], name: &str) -> Option<&'static ParamSpec> {
     specs.iter().find(|s| s.name == name)
+}
+
+/// Turn an enum knob's stored float into a choice index.
+///
+/// Enum values travel as floats like every other knob, so a position halfway
+/// between two choices has to land on the nearer one rather than truncate.
+pub fn choice(value: f32) -> usize {
+    if value.is_finite() && value > 0.0 {
+        value.round() as usize
+    } else {
+        0
+    }
 }
 
 /// Validate a value against a knob's end stops. NaN is rejected as out of range.

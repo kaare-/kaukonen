@@ -2,6 +2,7 @@
 
 use kaukonen::neuron::NeuronParams;
 use kaukonen::nonlinearity::Nonlinearity;
+use kaukonen::plasticity::{Plasticity, Rule};
 use kaukonen::rc1::{count_bursts, count_crossings, Rc1Params};
 use kaukonen::{
     Engine, Network, Neuron, Rc1, Recorder, SimConfig, Source, Tc3, Tc3Params, DEFAULT_DT,
@@ -15,6 +16,16 @@ fn main() {
         "tc3",
         Tc3::new(Tc3Params {
             natural_decay: 0.015,
+            activity_gain: 0.004,
+            // Without homeostasis, Hebbian growth pins every route at w_max
+            // and ACTIVITY sits on the rail, which tells you nothing.
+            plasticity: Plasticity {
+                rule: Rule::Oja,
+                gamma: 0.6,
+                scaling: 0.4,
+                target_norm: 1.2,
+                ..Plasticity::default()
+            },
             ..Tc3Params::default()
         }),
     );
