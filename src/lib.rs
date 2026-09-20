@@ -1,0 +1,30 @@
+//! Kaukonen — continuous-time simulator for patchable analog neural modules.
+//!
+//! This is a phenomenological model of physical / analog hardware, not a
+//! machine-learning framework. Computation arises from leaky state, local
+//! plasticity, nonlinear excitability, and feedback.
+
+pub mod engine;
+pub mod integrate;
+pub mod module;
+pub mod network;
+pub mod neuron;
+pub mod nonlinearity;
+pub mod plasticity;
+pub mod rc1;
+pub mod record;
+pub mod source;
+pub mod tc3;
+pub mod types;
+
+pub use engine::Engine;
+pub use module::{AnalogModule, Module, ModuleOutputs};
+pub use network::{Cable, ModuleId, Network, PatchError};
+pub use neuron::{Neuron, NeuronParams, NeuronState};
+pub use nonlinearity::Nonlinearity;
+pub use plasticity::{Hebbian, Plasticity, PlasticityRule};
+pub use rc1::{Rc1, Rc1Params, Rc1State};
+pub use record::Recorder;
+pub use source::{Source, SourceKind};
+pub use tc3::{Tc3, Tc3Params, Tc3State};
+pub use types::{InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL};

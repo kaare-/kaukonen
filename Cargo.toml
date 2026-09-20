@@ -1,0 +1,15 @@
+[package]
+name = "kaukonen"
+version = "0.1.0"
+edition = "2021"
+description = "Continuous-time simulator for patchable analog Eurorack neural modules"
+license = "MIT"
+publish = false
+
+[lib]
+name = "kaukonen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "demo"
+path = "src/bin/demo.rs"
