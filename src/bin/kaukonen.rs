@@ -344,10 +344,15 @@ fn cmd_modules(args: &Args) -> Result<(), String> {
                 println!(
                     "| `{}` | {} | `{}` | {} |",
                     spec.name,
-                    range_of(spec),
+                    // A choice list is pipe separated, which would otherwise
+                    // end the table cell.
+                    range_of(spec).replace('|', "\\|"),
                     spec.format(spec.default),
                     spec.doc
                 );
+            }
+            if name == "rc1" {
+                println!("\nPresets: {}.", rc1_presets().join(", "));
             }
             println!();
         } else {

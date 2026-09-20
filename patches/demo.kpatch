@@ -1,0 +1,32 @@
+# The original v1 demonstration patch, as a patch file.
+#
+# A small recurrent rack: a pulse stimulus into TC-3, TC-3's mixed outputs
+# into two neurons, the neurons into two RC-1 cells, and the cells back into
+# TC-3 - plus one cell back into a neuron and TC-3's own ACTIVITY into the
+# other. There is no input layer and no output layer; everything runs at once.
+#
+#   kaukonen render --patch patches/demo.kpatch --html out/demo.html --stride 4
+
+dt 0.0005
+seconds 5
+
+module src     source shape=pulse freq=1.4286 width=0.1143 amp=2.2 offset=0.15
+module tc3     tc3    natural_decay=0.015 activity_gain=0.004 rule=oja gamma=0.6 scaling=0.4 target_norm=1.2
+module neuron0 neuron w0=0.9 w1=0.35 bias=0.15 leak=7 gain=4 response=0.7
+module neuron1 neuron w0=0.8 w1=0.25 bias=-0.05 leak=6 gain=4.5 shape=asym_tanh response=0.9 asym=0.5556
+module rc1_0   rc1    preset=burst
+module rc1_1   rc1    preset=tonic drive_gain=0.35
+
+patch src.out      -> tc3.a
+patch src.out      -> tc3.learn
+patch tc3.a        -> neuron0.in0
+patch tc3.b        -> neuron1.in0
+patch neuron0.out  -> rc1_0.in
+patch neuron1.out  -> rc1_1.in
+patch rc1_0.out    -> tc3.b
+patch rc1_1.out    -> tc3.c
+patch rc1_0.out    -> neuron0.in1
+patch tc3.activity -> neuron1.in1
+patch rc1_1.out    -> tc3.forget
+
+record src.out neuron0.v neuron1.v rc1_0.v rc1_0.s rc1_1.v rc1_1.s tc3.w00 tc3.w11 tc3.norm tc3.activity

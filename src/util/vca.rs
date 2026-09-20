@@ -57,9 +57,12 @@ impl Vca {
             return 0.0;
         }
         match self.response {
-            // Exponential is what a real VCA does and what suits an envelope;
-            // it reaches unity at 1.0 and falls away by decades below that.
-            1 => (EXP_DECADES * (amount - 1.0) * std::f32::consts::LN_10).exp(),
+            // Exponential is what a real VCA does and what suits an envelope:
+            // unity when fully open, falling away by decades below that. It
+            // stops at unity, because "fully open" is the top of the curve and
+            // a CV that overshoots should not multiply by hundreds. Deliberate
+            // gain is what the level knob is for.
+            1 => (EXP_DECADES * (amount.min(1.0) - 1.0) * std::f32::consts::LN_10).exp(),
             _ => amount,
         }
     }
@@ -146,6 +149,15 @@ mod tests {
             (half - 10f32.powf(-1.5)).abs() < 1e-3,
             "half open gave {half}"
         );
+    }
+
+    #[test]
+    fn an_exponential_vca_stops_at_unity() {
+        let mut vca = Vca::new();
+        vca.set_param("response", 1.0).unwrap();
+        // 10 V into a jack calibrated for 5 V must not multiply by hundreds.
+        let hot = vca.step(&[1.0, 10.0], 0.001)[0];
+        assert!((hot - 1.0).abs() < 1e-4, "overshoot gave gain {hot}");
     }
 
     #[test]

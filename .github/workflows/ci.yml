@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup component add rustfmt clippy
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --all-targets
+
+      # The shipped patches are part of the interface, so a change that breaks
+      # one of them should fail here rather than in someone's rack.
+      - name: Render every shipped patch
+        run: |
+          cargo build --release
+          for patch in patches/*.kpatch; do
+            echo "::group::$patch"
+            ./target/release/kaukonen inspect --patch "$patch"
+            ./target/release/kaukonen render --patch "$patch" --seconds 1 --stride 8
+            echo "::endgroup::"
+          done
+
+      - name: The module reference is generated, not hand written
+        run: |
+          ./target/release/kaukonen modules --markdown > /tmp/modules.md
+          diff -u docs/modules.md /tmp/modules.md

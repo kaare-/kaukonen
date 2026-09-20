@@ -1,0 +1,69 @@
+# Recorded sound teaching a connectome, and the connectome colouring it back.
+#
+# An envelope follower on the incoming audio opens the amplifier, so the output
+# follows the dynamics of whatever you feed it. What the connectome does is
+# change the timbre: its mixed output sweeps the filter cutoff, and its
+# ACTIVITY - how fast its own memory is currently moving - pushes the
+# resonance. So the filter rings hardest while the rack is learning something,
+# and settles as the memory settles.
+#
+# The rule is bcm, whose sliding threshold means a route weakens when its
+# channel falls below its own recent activity. It needs its inputs kept small:
+# the threshold tracks the square of the output, so audio at full Eurorack
+# level would drive it straight into the end stops. Hence the attenuators.
+#
+# A small steady FORGET keeps the memory turning over, so a later burst still
+# finds something to learn instead of arriving at an already-settled matrix.
+#
+# Needs a file to listen to:
+#
+#   kaukonen render --patch patches/listen.kpatch --in your.wav \
+#       --out out/listen.wav --html out/listen.html --stride 16
+#
+# With no --in the rack runs in silence, which is itself worth hearing: the
+# weights decay, ACTIVITY falls away, and nothing comes out.
+
+rate 48000
+seconds 8
+seed 31
+mismatch 0.03
+
+module adc   audioin  gain=1.2 env_rate=12
+module cells rc1[2]   preset=tonic rate=90 noise=0.01 output_gain=1.5
+module brain tc3      rule=bcm theta_rate=3 natural_decay=0.25 scaling=3 target_norm=0.9 activity_gain=2.5 w_max=1.5 w_min=-1.5
+module teach mix      a0=0.35 a1=0 a2=0 a3=0
+module decay mix      a0=0 a1=0 a2=0 a3=0 offset=0.15
+module swell mix      a0=2 a1=0 a2=0 a3=0 level=4
+module lift  mix      a0=1.6 a1=0.8 a2=0 a3=0 offset=1.2 level=0.8
+module filt  vcf      cutoff=380 resonance=0.35 cv_depth=1.2 res_depth=0.12 drive=1.3
+module amp   vca      response=exponential gain=0.1 cv_depth=1
+module dac   audioout rate=48000 level=1.4
+
+# The sound itself, its envelope, and a cell give the connectome three
+# channels to correlate. All kept small, for the rule's sake.
+patch adc.out      -> brain.a
+patch adc.env      -> brain.b
+patch cells[0].out -> brain.c
+
+# Learning happens while there is something to hear; forgetting always.
+patch adc.env   -> teach.in0
+patch teach.out -> brain.learn
+patch decay.out -> brain.forget
+
+# Amplitude follows the input, so the output has the shape of the source.
+patch adc.env   -> swell.in0
+patch swell.out -> amp.cv
+
+# Timbre comes from the connectome: its output sweeps the cutoff, and its own
+# plasticity rate pushes the resonance.
+patch brain.a        -> lift.in0
+patch cells[1].out   -> lift.in1
+patch lift.out       -> filt.cutoff_cv
+patch brain.activity -> filt.res_cv
+
+patch adc.out  -> filt.in
+patch filt.out -> amp.in
+patch amp.out  -> dac.left
+patch amp.out  -> dac.right
+
+record adc.out adc.env cells[0].v brain.w00 brain.w11 brain.norm brain.theta brain.activity filt.cutoff amp.gain
