@@ -7,22 +7,29 @@
 #
 # TC-3 watches three slices of the bank and feeds its mixed output back into
 # all of them, so the cells are weakly coupled through a connectome that is
-# itself changing. Watch tc3.norm: synaptic scaling holds the total
+# itself changing. Watch brain.norm: synaptic scaling holds the total
 # conductance near its target while the individual routes move.
 #
-#   kaukonen render --patch patches/bank64.kpatch --html out/bank64.html --stride 8
+#   kaukonen render --patch patches/bank64.kpatch --html out/bank64.html --stride 20
 #
-# The raster pane in that page is the point: it shows whether the bank
-# synchronises, stays scattered, or breaks into groups.
+# The raster pane in that page is the point. All 64 cells fire together for the
+# first few hundred milliseconds, because they start from the same state. Then
+# tolerance and noise pull them apart - and they do not simply scatter: the weak
+# coupling keeps gathering them back into partial groups of twenty to forty,
+# indefinitely, without ever returning to lockstep. Individual cells fire
+# between 17 and 39 times over the twenty seconds.
 
 dt 0.0005
 seconds 20
 seed 2024
 mismatch 0.06
 
-module cells rc1[64] preset=burst noise=0.02 drift=0.01
+module cells rc1[64] preset=burst noise=0.02 drift=0.01 output_gain=2.5
 module brain tc3     rule=oja gamma=0.5 scaling=0.8 target_norm=1.0 activity_gain=0.01 drift=0.005
-module fan   mix     a0=0.25 a1=0 a2=0 a3=0
+# The cells rest at a strongly negative output, so summing them would be a
+# large negative bias that suppresses the whole bank. The offset re-centres
+# the coupling, and the attenuator keeps it weak enough to stay interesting.
+module fan   mix     a0=0.08 a1=0 a2=0 a3=0 offset=0.5
 
 # Three slices of the bank, so the connectome sees three different populations.
 patch cells[0].out  -> brain.a
