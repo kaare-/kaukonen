@@ -868,7 +868,7 @@ mod tests {
 
     #[test]
     fn feedback_cables_are_marked_in_the_diagram() {
-        let (recorder, network, schedule) = recorded(
+        let (_recorder, network, schedule) = recorded(
             "rate 200\nseconds 0.1\nmodule a neuron\nmodule b neuron\n\
              patch a.out -> b.in0\npatch b.out -> a.in0\nrecord a.v\n",
         );
