@@ -19,6 +19,7 @@ pub mod rc1;
 pub mod record;
 pub mod render;
 pub mod schedule;
+pub mod scope;
 pub mod source;
 pub mod tc3;
 pub mod types;
@@ -39,6 +40,7 @@ pub use rc1::{Rc1, Rc1Params, Rc1State};
 pub use record::Recorder;
 pub use render::{render, RenderOptions, RenderReport};
 pub use schedule::Schedule;
+pub use scope::Scope;
 pub use source::{Source, SourceKind, SourceParams};
 pub use tc3::{Tc3, Tc3Params, Tc3State};
 pub use types::{

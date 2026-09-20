@@ -6,6 +6,7 @@ use kaukonen::param::{trim_float, ParamSpec};
 use kaukonen::patch::{self, Patch};
 use kaukonen::render::{render, RenderOptions};
 use kaukonen::schedule::Schedule;
+use kaukonen::scope::Scope;
 use kaukonen::wav::{Audio, SampleFormat};
 use kaukonen::{Module, Recorder};
 use std::collections::BTreeMap;
@@ -93,7 +94,7 @@ fn cmd_render(args: &Args) -> Result<(), String> {
         input,
         stride: args.get_usize("stride")?.unwrap_or(1),
     };
-    let (_engine, recorder, report) = render(built, &options);
+    let (engine, recorder, report) = render(built, &options);
 
     println!(
         "ran  {:.2} s of simulated time, {} samples recorded",
@@ -139,10 +140,24 @@ fn cmd_render(args: &Args) -> Result<(), String> {
         println!("csv  {path}  {} channels", recorder.names.len());
     }
     if let Some(path) = args.get("html") {
-        let plotted: Vec<&str> = recorder.names.iter().map(String::as_str).collect();
-        recorder
-            .write_html(path, &plotted)
-            .map_err(|e| format!("{path}: {e}"))?;
+        let mut scope = Scope::new(source, &recorder)
+            .with_patch(&engine.network, engine.schedule())
+            .with_note(format!(
+                "{:.3} s at {} Hz frames, oversample {}",
+                report.seconds,
+                trim_float(engine.config.sample_rate),
+                engine.config.oversample
+            ));
+        if let Some(audio) = &report.audio {
+            scope = scope.with_audio(audio);
+        }
+        if report.clipped() {
+            scope = scope.with_note(format!(
+                "the converter clipped: the patch drove it to {:.2} of full scale",
+                report.peak
+            ));
+        }
+        scope.write(path).map_err(|e| format!("{path}: {e}"))?;
         println!("html {path}");
     }
     if recorder.names.is_empty() {
