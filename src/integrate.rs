@@ -12,6 +12,14 @@ pub fn leaky_integrate(v: f32, drive: f32, leak: f32, dt: f32) -> f32 {
     v_inf + (v - v_inf) * (-leak * dt).exp()
 }
 
+/// One-pole lowpass with its corner at `hz`, as an exact step.
+///
+/// The leak *is* the filter: `dy/dt = k(x - y)` with `k = 2*pi*hz`.
+pub fn lowpass(y: f32, x: f32, hz: f32, dt: f32) -> f32 {
+    let k = std::f32::consts::TAU * hz.max(0.0);
+    leaky_integrate(y, k * x, k, dt)
+}
+
 /// Forward Euler for leftover nonlinear terms: `x + dt * dx`.
 pub fn euler(x: f32, dx: f32, dt: f32) -> f32 {
     x + dt * dx

@@ -1,5 +1,6 @@
 //! Uniform module contract and stack-allocated jack buffers.
 
+use crate::audio::{AudioIn, AudioOut};
 use crate::neuron::Neuron;
 use crate::param::{ParamError, ParamSpec};
 use crate::rc1::Rc1;
@@ -147,6 +148,8 @@ pub enum Module {
     Rc1(Rc1),
     Tc3(Tc3),
     Source(Source),
+    AudioIn(AudioIn),
+    AudioOut(AudioOut),
 }
 
 /// Forward one expression to whichever variant is held.
@@ -157,6 +160,8 @@ macro_rules! dispatch {
             Module::Rc1($inner) => $body,
             Module::Tc3($inner) => $body,
             Module::Source($inner) => $body,
+            Module::AudioIn($inner) => $body,
+            Module::AudioOut($inner) => $body,
         }
     };
 }
@@ -171,6 +176,8 @@ impl Module {
         ("rc1", || Module::Rc1(Rc1::default())),
         ("tc3", || Module::Tc3(Tc3::default())),
         ("source", || Module::Source(Source::default())),
+        ("audioin", || Module::AudioIn(AudioIn::new())),
+        ("audioout", || Module::AudioOut(AudioOut::new())),
     ];
 
     /// Build a default instance of a kind named in a patch file.
@@ -183,6 +190,29 @@ impl Module {
 
     pub fn kind_names() -> Vec<&'static str> {
         Self::KINDS.iter().map(|(name, _)| *name).collect()
+    }
+
+    /// The sound-input module, so a renderer can hand it a file to play.
+    pub fn as_audio_in_mut(&mut self) -> Option<&mut AudioIn> {
+        match self {
+            Self::AudioIn(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// The sound-output module, so a renderer can collect what it captured.
+    pub fn as_audio_out(&self) -> Option<&AudioOut> {
+        match self {
+            Self::AudioOut(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    pub fn as_audio_out_mut(&mut self) -> Option<&mut AudioOut> {
+        match self {
+            Self::AudioOut(m) => Some(m),
+            _ => None,
+        }
     }
 }
 
@@ -249,6 +279,18 @@ impl From<Tc3> for Module {
 impl From<Source> for Module {
     fn from(m: Source) -> Self {
         Self::Source(m)
+    }
+}
+
+impl From<AudioIn> for Module {
+    fn from(m: AudioIn) -> Self {
+        Self::AudioIn(m)
+    }
+}
+
+impl From<AudioOut> for Module {
+    fn from(m: AudioOut) -> Self {
+        Self::AudioOut(m)
     }
 }
 

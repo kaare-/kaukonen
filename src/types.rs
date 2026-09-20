@@ -90,6 +90,26 @@ pub fn soft_rail(v: Volt, rail: Volt) -> Volt {
     rail * (v / rail).tanh()
 }
 
+/// Transparent below `knee`, then bends smoothly to a hard ceiling.
+///
+/// A converter should not colour everything that passes through it, so unlike
+/// [`soft_rail`] this is exactly unity up to the knee and only rounds off the
+/// peaks above it. It never exceeds `ceiling`.
+pub fn soft_clip(v: Volt, ceiling: Volt, knee: f32) -> Volt {
+    if ceiling <= 0.0 {
+        return 0.0;
+    }
+    let knee = knee.clamp(0.0, 0.999);
+    let t = v / ceiling;
+    let magnitude = t.abs();
+    if magnitude <= knee {
+        return v;
+    }
+    let span = 1.0 - knee;
+    let curved = knee + span * ((magnitude - knee) / span).tanh();
+    ceiling * curved * t.signum()
+}
+
 /// How a newly instantiated module differs from its nominal params.
 ///
 /// v1 only applies a tiny seeded offset. Noise and drift stay off unless a
