@@ -79,6 +79,10 @@ impl Network {
         self.modules.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.modules.is_empty()
+    }
+
     pub fn patch(
         &mut self,
         from: ModuleId,
@@ -86,12 +90,9 @@ impl Network {
         to: ModuleId,
         to_jack: &str,
     ) -> Result<(), PatchError> {
-        let src = self
-            .modules
-            .get(from.0)
-            .ok_or_else(|| PatchError {
-                message: format!("unknown source module {}", from.0),
-            })?;
+        let src = self.modules.get(from.0).ok_or_else(|| PatchError {
+            message: format!("unknown source module {}", from.0),
+        })?;
         let dst = self.modules.get(to.0).ok_or_else(|| PatchError {
             message: format!("unknown destination module {}", to.0),
         })?;

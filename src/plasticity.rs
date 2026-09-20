@@ -45,6 +45,31 @@ impl Default for Plasticity {
     }
 }
 
+impl Plasticity {
+    /// Rule names addressable from a patch file, in index order.
+    pub const RULES: &'static [&'static str] = &["hebbian"];
+
+    pub fn rule(self) -> usize {
+        match self {
+            Self::Hebbian(_) => 0,
+        }
+    }
+
+    pub fn deadzone(self) -> f32 {
+        match self {
+            Self::Hebbian(rule) => rule.deadzone,
+        }
+    }
+
+    /// Rebuild from flat knob values. Unknown rules fall back to Hebbian.
+    pub fn from_parts(rule: usize, deadzone: f32) -> Self {
+        match rule {
+            0 => Self::Hebbian(Hebbian { deadzone }),
+            _ => Self::Hebbian(Hebbian { deadzone }),
+        }
+    }
+}
+
 impl PlasticityRule for Plasticity {
     fn dw(&self, input: Volt, output: Volt, weight: Volt, learn: Volt, forget: Volt) -> f32 {
         match self {

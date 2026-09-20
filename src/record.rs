@@ -179,11 +179,7 @@ fn json_series(series: &[(String, Vec<f32>)]) -> String {
         if i > 0 {
             s.push(',');
         }
-        s.push_str(&format!(
-            "{{name:{},y:{}}}",
-            js_string(name),
-            json_f32(y)
-        ));
+        s.push_str(&format!("{{name:{},y:{}}}", js_string(name), json_f32(y)));
     }
     s.push(']');
     s

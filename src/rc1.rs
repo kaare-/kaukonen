@@ -5,11 +5,31 @@
 //! digital integrate-and-fire comparator.
 
 use crate::integrate::softplus;
-use crate::module::{find_jack, AnalogModule, ModuleOutputs};
+use crate::module::{AnalogModule, ModuleOutputs};
+use crate::param::{self, params, ParamError, ParamSpec, Unit};
 use crate::types::{clamp_rail, InstanceVariation, Volt, DEFAULT_RAIL};
 
-const IN_JACKS: [&str; 1] = ["in"];
-const OUT_JACKS: [&str; 1] = ["out"];
+const IN_JACKS: &[&str] = &["in"];
+const OUT_JACKS: &[&str] = &["out"];
+const STATE_FIELDS: &[&str] = &["v", "r", "s"];
+
+const PARAMS: &[ParamSpec] = params! {
+    "capacitance", Unit::Ratio, 0.01 ..= 100.0, 1.0, Log, "effective capacitance; larger is a slower membrane";
+    "leak", Unit::Rate, 0.0 ..= 50.0, 0.0, Linear, "extra linear leak on v";
+    "threshold", Unit::Volt, -10.0 ..= 10.0, -1.6, Linear, "adaptation setpoint / rest-like voltage";
+    "sharpness", Unit::Ratio, 0.0 ..= 20.0, 3.0, Linear, "regenerative v^2 gain; higher is sharper excitability";
+    "cubic", Unit::Ratio, 0.0 ..= 10.0, 1.0, Linear, "restoring v^3 gain";
+    "discharge", Unit::Ratio, 0.0 ..= 10.0, 1.0, Linear, "how strongly recovery feeds back into the membrane";
+    "recovery_rate", Unit::Rate, 0.001 ..= 100.0, 1.0, Log, "fast recovery rate (1/tau_r)";
+    "recovery_drive", Unit::Ratio, 0.0 ..= 20.0, 5.0, Linear, "quadratic recovery drive";
+    "adaptation_rate", Unit::Rate, 0.00001 ..= 10.0, 0.006, Log, "slow adaptation rate (1/tau_s); keep well below recovery_rate to burst";
+    "adaptation_depth", Unit::Ratio, 0.0 ..= 20.0, 4.0, Linear, "how strongly v charges the slow variable";
+    "drive_gain", Unit::Ratio, -10.0 ..= 10.0, 1.0, Linear, "scale on the patched input current";
+    "output_gain", Unit::Ratio, 0.0 ..= 10.0, 5.0, Linear, "output scale after saturation";
+    "rate", Unit::Ratio, 0.01 ..= 20000.0, 80.0, Log, "model time per second of wall clock; raise into the thousands to hear the cell";
+    "bias", Unit::Volt, -10.0 ..= 10.0, 2.0, Linear, "constant bias current";
+    "noise", Unit::Volt, 0.0 ..= 1.0, 0.0, Linear, "thermal noise RMS injected into the membrane";
+};
 
 /// Knob / component characteristics.
 #[derive(Clone, Copy, Debug)]
@@ -36,10 +56,13 @@ pub struct Rc1Params {
     pub adaptation_depth: f32,
     pub drive_gain: f32,
     pub output_gain: f32,
-    /// Maps wall-clock seconds into model time.
-    pub time_scale: f32,
+    /// Model time per second of wall clock. 80 keeps the cell biological;
+    /// thousands put it in the audio band.
+    pub rate: f32,
     /// Constant bias current (HR `I` offset).
     pub bias: f32,
+    /// Thermal noise RMS in volts. Zero means a mathematically ideal module.
+    pub noise: f32,
 }
 
 impl Default for Rc1Params {
@@ -48,7 +71,29 @@ impl Default for Rc1Params {
     }
 }
 
+/// Builds one named factory preset.
+pub type Rc1Preset = fn() -> Rc1Params;
+
 impl Rc1Params {
+    /// Factory presets addressable by name from a patch file.
+    pub const PRESETS: &'static [(&'static str, Rc1Preset)] = &[
+        ("subthreshold", Rc1Params::subthreshold),
+        ("pulse", Rc1Params::pulse),
+        ("tonic", Rc1Params::tonic),
+        ("burst", Rc1Params::burst),
+    ];
+
+    pub fn from_preset(name: &str) -> Option<Self> {
+        Self::PRESETS
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, make)| make())
+    }
+
+    pub fn preset_names() -> Vec<&'static str> {
+        Self::PRESETS.iter().map(|(n, _)| *n).collect()
+    }
+
     /// Weak drive, no spikes. Good for leak / slow-charge tests.
     pub fn subthreshold() -> Self {
         Self {
@@ -64,8 +109,9 @@ impl Rc1Params {
             adaptation_depth: 4.0,
             drive_gain: 1.0,
             output_gain: 5.0,
-            time_scale: 80.0,
+            rate: 80.0,
             bias: 0.0,
+            noise: 0.0,
         }
     }
 
@@ -91,20 +137,10 @@ impl Rc1Params {
     /// Slow adaptation splits spikes into bursts.
     pub fn burst() -> Self {
         Self {
-            capacitance: 1.0,
             leak: 0.0,
-            threshold: -1.6,
-            sharpness: 3.0,
-            cubic: 1.0,
-            discharge: 1.0,
-            recovery_rate: 1.0,
-            recovery_drive: 5.0,
             adaptation_rate: 0.006,
-            adaptation_depth: 4.0,
-            drive_gain: 1.0,
-            output_gain: 5.0,
-            time_scale: 80.0,
             bias: 2.0,
+            ..Self::subthreshold()
         }
     }
 
@@ -147,6 +183,12 @@ pub struct Rc1 {
     pub state: Rc1State,
 }
 
+impl Default for Rc1 {
+    fn default() -> Self {
+        Self::new(Rc1Params::default())
+    }
+}
+
 impl Rc1 {
     pub fn new(params: Rc1Params) -> Self {
         Self::instantiate(params, InstanceVariation::IDENTITY)
@@ -168,8 +210,7 @@ impl Rc1 {
         let c = p.capacitance.max(1e-4);
         // Smooth regenerative current: quadratic / cubic N-shape, plus a
         // softplus kick that grows as v approaches the firing region.
-        let exc = p.sharpness * v * v - p.cubic * v * v * v
-            + 0.15 * softplus(p.sharpness * (v - 0.0));
+        let exc = p.sharpness * v * v - p.cubic * v * v * v + 0.15 * softplus(p.sharpness * v);
         let drive = p.drive_gain * i_in + p.bias;
         // Hindmarsh–Rose-like: recovery `r` is added, adaptation `s` subtracted.
         // `discharge` scales the recovery contribution (1.0 = standard HR).
@@ -198,32 +239,86 @@ impl Rc1 {
 }
 
 impl AnalogModule for Rc1 {
-    fn input_count(&self) -> usize {
-        1
+    fn kind_name(&self) -> &'static str {
+        "rc1"
     }
 
-    fn output_count(&self) -> usize {
-        1
+    fn in_jacks(&self) -> &'static [&'static str] {
+        IN_JACKS
     }
 
-    fn jack_in(&self, name: &str) -> Option<usize> {
-        find_jack(&IN_JACKS, name)
+    fn out_jacks(&self) -> &'static [&'static str] {
+        OUT_JACKS
     }
 
-    fn jack_out(&self, name: &str) -> Option<usize> {
-        find_jack(&OUT_JACKS, name)
+    fn params(&self) -> &'static [ParamSpec] {
+        PARAMS
+    }
+
+    fn get_param(&self, name: &str) -> Option<f32> {
+        let p = &self.params;
+        Some(match name {
+            "capacitance" => p.capacitance,
+            "leak" => p.leak,
+            "threshold" => p.threshold,
+            "sharpness" => p.sharpness,
+            "cubic" => p.cubic,
+            "discharge" => p.discharge,
+            "recovery_rate" => p.recovery_rate,
+            "recovery_drive" => p.recovery_drive,
+            "adaptation_rate" => p.adaptation_rate,
+            "adaptation_depth" => p.adaptation_depth,
+            "drive_gain" => p.drive_gain,
+            "output_gain" => p.output_gain,
+            "rate" => p.rate,
+            "bias" => p.bias,
+            "noise" => p.noise,
+            _ => return None,
+        })
+    }
+
+    fn set_param(&mut self, name: &str, value: f32) -> Result<(), ParamError> {
+        let spec = param::find_spec(PARAMS, name).ok_or_else(|| self.unknown_param(name))?;
+        let v = param::checked(spec, value)?;
+        let p = &mut self.params;
+        match name {
+            "capacitance" => p.capacitance = v,
+            "leak" => p.leak = v,
+            "threshold" => p.threshold = v,
+            "sharpness" => p.sharpness = v,
+            "cubic" => p.cubic = v,
+            "discharge" => p.discharge = v,
+            "recovery_rate" => p.recovery_rate = v,
+            "recovery_drive" => p.recovery_drive = v,
+            "adaptation_rate" => p.adaptation_rate = v,
+            "adaptation_depth" => p.adaptation_depth = v,
+            "drive_gain" => p.drive_gain = v,
+            "output_gain" => p.output_gain = v,
+            "rate" => p.rate = v,
+            "bias" => p.bias = v,
+            "noise" => p.noise = v,
+            _ => return Err(self.unknown_param(name)),
+        }
+        Ok(())
+    }
+
+    fn state_fields(&self) -> &'static [&'static str] {
+        STATE_FIELDS
+    }
+
+    fn read_state(&self, out: &mut [Volt]) {
+        let values = [self.state.v, self.state.r, self.state.s];
+        for (slot, value) in out.iter_mut().zip(values) {
+            *slot = value;
+        }
     }
 
     fn step(&mut self, inputs: &[Volt], dt: f32) -> ModuleOutputs {
         let i_in = inputs.first().copied().unwrap_or(0.0);
-        let dt_model = dt * self.params.time_scale;
+        let dt_model = dt * self.params.rate;
         self.rk2_step(i_in, dt_model);
         let out = self.params.output_gain * self.state.v.tanh();
         ModuleOutputs::one(clamp_rail(out, DEFAULT_RAIL))
-    }
-
-    fn snapshot(&self) -> Vec<(&'static str, Volt)> {
-        vec![("v", self.state.v), ("r", self.state.r), ("s", self.state.s)]
     }
 }
 
@@ -288,7 +383,7 @@ mod tests {
     #[test]
     fn brief_kick_makes_a_pulse() {
         let drive = |t: f32| {
-            if t >= 0.20 && t < 0.215 {
+            if (0.20..0.215).contains(&t) {
                 6.0
             } else {
                 0.0
@@ -333,5 +428,53 @@ mod tests {
             bursts >= 2,
             "expected ≥2 bursts, got {bursts} from spikes {spikes:?}"
         );
+    }
+
+    #[test]
+    fn presets_are_addressable_by_name() {
+        for name in Rc1Params::preset_names() {
+            assert!(Rc1Params::from_preset(name).is_some(), "{name}");
+        }
+        assert!(Rc1Params::from_preset("nope").is_none());
+    }
+
+    #[test]
+    fn rate_knob_scales_model_time() {
+        let slow = run(
+            Rc1Params {
+                rate: 40.0,
+                ..Rc1Params::tonic()
+            },
+            |_| 0.0,
+            1.0,
+        );
+        let fast = run(
+            Rc1Params {
+                rate: 160.0,
+                ..Rc1Params::tonic()
+            },
+            |_| 0.0,
+            1.0,
+        );
+        assert!(
+            fast.1.len() > 2 * slow.1.len(),
+            "rate did not speed the cell up: {} vs {}",
+            slow.1.len(),
+            fast.1.len()
+        );
+    }
+
+    #[test]
+    fn param_defaults_match_the_default_module() {
+        let cell = Rc1::default();
+        for spec in cell.params() {
+            let got = cell.get_param(spec.name).expect(spec.name);
+            assert!(
+                (got - spec.default).abs() < 1e-9,
+                "{} default {} but module has {got}",
+                spec.name,
+                spec.default
+            );
+        }
     }
 }

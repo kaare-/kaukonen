@@ -68,7 +68,8 @@ impl Engine {
     /// Channel names are `label.field`, e.g. `rc1_0.v` or `tc3.activity`.
     pub fn lookup_channel(&self, name: &str) -> Option<Volt> {
         let (label, field) = name.split_once('.')?;
-        let idx = (0..self.network.len()).find(|&i| self.network.label(crate::network::ModuleId(i)) == label)?;
+        let idx = (0..self.network.len())
+            .find(|&i| self.network.label(crate::network::ModuleId(i)) == label)?;
         self.network
             .get(crate::network::ModuleId(idx))
             .snapshot()

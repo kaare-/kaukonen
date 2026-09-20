@@ -11,10 +11,13 @@ fn main() {
     let mut net = Network::new();
 
     let src = net.add("src", Source::pulse(0.7, 0.08, 2.2, 0.15));
-    let tc3 = net.add("tc3", Tc3::new(Tc3Params {
-        natural_decay: 0.015,
-        ..Tc3Params::default()
-    }));
+    let tc3 = net.add(
+        "tc3",
+        Tc3::new(Tc3Params {
+            natural_decay: 0.015,
+            ..Tc3Params::default()
+        }),
+    );
     let n0 = net.add(
         "neuron0",
         Neuron::new(NeuronParams {
@@ -72,7 +75,13 @@ fn main() {
     ];
     // 0.5 ms * 4 = 2 ms samples keep the HTML light.
     let mut rec = Recorder::with_stride(channels, 4);
-    let mut engine = Engine::new(net, SimConfig { dt: DEFAULT_DT, rail: 10.0 });
+    let mut engine = Engine::new(
+        net,
+        SimConfig {
+            dt: DEFAULT_DT,
+            rail: 10.0,
+        },
+    );
     engine.run(5.0, &mut rec);
 
     rec.write_csv("out/demo_trace.csv").expect("write csv");
@@ -128,6 +137,9 @@ fn main() {
         rec.channel("tc3.w00").and_then(|c| c.first().copied()),
         rec.channel("tc3.w00").and_then(|c| c.last().copied()),
     ) {
-        println!("  tc3.w00 {w0:.3} → {w1:.3}  (moved {})", (w1 - w0).abs() > 0.01);
+        println!(
+            "  tc3.w00 {w0:.3} → {w1:.3}  (moved {})",
+            (w1 - w0).abs() > 0.01
+        );
     }
 }

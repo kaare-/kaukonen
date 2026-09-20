@@ -57,7 +57,10 @@ pub struct InstanceVariation {
 }
 
 impl InstanceVariation {
-    pub const IDENTITY: Self = Self { seed: 0, scale: 0.0 };
+    pub const IDENTITY: Self = Self {
+        seed: 0,
+        scale: 0.0,
+    };
 
     pub fn new(seed: u64, scale: f32) -> Self {
         Self { seed, scale }
