@@ -22,6 +22,7 @@ pub mod schedule;
 pub mod source;
 pub mod tc3;
 pub mod types;
+pub mod util;
 pub mod wav;
 
 pub use audio::{AudioIn, AudioOut};
@@ -43,4 +44,5 @@ pub use tc3::{Tc3, Tc3Params, Tc3State};
 pub use types::{
     InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL, DEFAULT_SAMPLE_RATE,
 };
+pub use util::{Env, Mix, Noise, Vca, Vcf, Vco};
 pub use wav::{Audio, SampleFormat};

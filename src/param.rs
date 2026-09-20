@@ -278,6 +278,49 @@ macro_rules! params {
 
 pub(crate) use params;
 
+/// Generate `params`, `get_param` and `set_param` for a module whose knobs are
+/// plain struct fields, which keeps the getter and setter from drifting apart.
+///
+/// Modules whose knobs map onto nested values — a neuron's saturation curve, a
+/// TC-3's rule — still write the two methods out by hand.
+macro_rules! knob_accessors {
+    (
+        $specs:expr;
+        floats { $( $fname:literal => $ffield:ident ),* $(,)? }
+        choices { $( $cname:literal => $cfield:ident ),* $(,)? }
+    ) => {
+        fn params(&self) -> &'static [$crate::param::ParamSpec] {
+            $specs
+        }
+
+        fn get_param(&self, name: &str) -> Option<f32> {
+            Some(match name {
+                $( $fname => self.$ffield, )*
+                $( $cname => self.$cfield as f32, )*
+                _ => return None,
+            })
+        }
+
+        fn set_param(
+            &mut self,
+            name: &str,
+            value: f32,
+        ) -> Result<(), $crate::param::ParamError> {
+            let spec = $crate::param::find_spec($specs, name)
+                .ok_or_else(|| self.unknown_param(name))?;
+            let v = $crate::param::checked(spec, value)?;
+            match name {
+                $( $fname => self.$ffield = v, )*
+                $( $cname => self.$cfield = $crate::param::choice(v), )*
+                _ => return Err(self.unknown_param(name)),
+            }
+            Ok(())
+        }
+    };
+}
+
+pub(crate) use knob_accessors;
+
 #[cfg(test)]
 mod tests {
     use super::*;

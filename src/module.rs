@@ -7,6 +7,7 @@ use crate::rc1::Rc1;
 use crate::source::Source;
 use crate::tc3::Tc3;
 use crate::types::{InstanceVariation, Volt};
+use crate::util::{Env, Mix, Noise, Vca, Vcf, Vco};
 
 /// Maximum jacks on any one module (TC-3 has 5 inputs / 4 outputs).
 pub const MAX_PORTS: usize = 8;
@@ -150,6 +151,12 @@ pub enum Module {
     Source(Source),
     AudioIn(AudioIn),
     AudioOut(AudioOut),
+    Vco(Vco),
+    Vcf(Vcf),
+    Vca(Vca),
+    Mix(Mix),
+    Env(Env),
+    Noise(Noise),
 }
 
 /// Forward one expression to whichever variant is held.
@@ -162,6 +169,12 @@ macro_rules! dispatch {
             Module::Source($inner) => $body,
             Module::AudioIn($inner) => $body,
             Module::AudioOut($inner) => $body,
+            Module::Vco($inner) => $body,
+            Module::Vcf($inner) => $body,
+            Module::Vca($inner) => $body,
+            Module::Mix($inner) => $body,
+            Module::Env($inner) => $body,
+            Module::Noise($inner) => $body,
         }
     };
 }
@@ -178,6 +191,12 @@ impl Module {
         ("source", || Module::Source(Source::default())),
         ("audioin", || Module::AudioIn(AudioIn::new())),
         ("audioout", || Module::AudioOut(AudioOut::new())),
+        ("vco", || Module::Vco(Vco::new())),
+        ("vcf", || Module::Vcf(Vcf::new())),
+        ("vca", || Module::Vca(Vca::new())),
+        ("mix", || Module::Mix(Mix::new())),
+        ("env", || Module::Env(Env::new())),
+        ("noise", || Module::Noise(Noise::new())),
     ];
 
     /// Build a default instance of a kind named in a patch file.
@@ -291,6 +310,42 @@ impl From<AudioIn> for Module {
 impl From<AudioOut> for Module {
     fn from(m: AudioOut) -> Self {
         Self::AudioOut(m)
+    }
+}
+
+impl From<Vco> for Module {
+    fn from(m: Vco) -> Self {
+        Self::Vco(m)
+    }
+}
+
+impl From<Vcf> for Module {
+    fn from(m: Vcf) -> Self {
+        Self::Vcf(m)
+    }
+}
+
+impl From<Vca> for Module {
+    fn from(m: Vca) -> Self {
+        Self::Vca(m)
+    }
+}
+
+impl From<Mix> for Module {
+    fn from(m: Mix) -> Self {
+        Self::Mix(m)
+    }
+}
+
+impl From<Env> for Module {
+    fn from(m: Env) -> Self {
+        Self::Env(m)
+    }
+}
+
+impl From<Noise> for Module {
+    fn from(m: Noise) -> Self {
+        Self::Noise(m)
     }
 }
 

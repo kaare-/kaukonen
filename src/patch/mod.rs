@@ -623,7 +623,7 @@ record cells[*].v brain.w00 brain.activity
     #[test]
     fn errors_name_the_line() {
         let cases = [
-            ("module a vco\n", 1, "unknown module kind"),
+            ("module a flux\n", 1, "unknown module kind"),
             ("module a rc1\nknob a.wobble 1\n", 2, "has no knob"),
             ("module a rc1[2]\npatch a.out -> a.in\n", 2, "2 instances"),
             ("module a rc1\npatch a.out -> a.gate\n", 2, "input jack"),
