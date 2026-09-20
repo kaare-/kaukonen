@@ -161,6 +161,10 @@ impl AnalogModule for Tc3 {
         STATE_FIELDS
     }
 
+    fn apply_variation(&mut self, variation: InstanceVariation) {
+        *self = Self::instantiate(self.params, variation);
+    }
+
     fn read_state(&self, out: &mut [Volt]) {
         let w = &self.state.weights;
         let values = [

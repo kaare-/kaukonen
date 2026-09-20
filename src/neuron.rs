@@ -158,6 +158,10 @@ impl AnalogModule for Neuron {
         STATE_FIELDS
     }
 
+    fn apply_variation(&mut self, variation: InstanceVariation) {
+        self.params = self.params.vary(variation);
+    }
+
     fn read_state(&self, out: &mut [Volt]) {
         if let Some(slot) = out.first_mut() {
             *slot = self.state.v;

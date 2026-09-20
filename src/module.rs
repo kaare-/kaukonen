@@ -5,7 +5,7 @@ use crate::param::{ParamError, ParamSpec};
 use crate::rc1::Rc1;
 use crate::source::Source;
 use crate::tc3::Tc3;
-use crate::types::Volt;
+use crate::types::{InstanceVariation, Volt};
 
 /// Maximum jacks on any one module (TC-3 has 5 inputs / 4 outputs).
 pub const MAX_PORTS: usize = 8;
@@ -91,6 +91,15 @@ pub trait AnalogModule {
 
     /// Names of the internal states this module exposes for recording.
     fn state_fields(&self) -> &'static [&'static str];
+
+    /// Make this instance physically individual.
+    ///
+    /// Called once after knobs are set, so component tolerance perturbs the
+    /// value the user dialled in rather than the factory default. Utility
+    /// modules that represent no physical hardware leave this alone.
+    fn apply_variation(&mut self, variation: InstanceVariation) {
+        let _ = variation;
+    }
 
     /// Write the current internal state into `out`, in `state_fields` order.
     fn read_state(&self, out: &mut [Volt]);
@@ -204,6 +213,10 @@ impl AnalogModule for Module {
 
     fn state_fields(&self) -> &'static [&'static str] {
         dispatch!(self, m => m.state_fields())
+    }
+
+    fn apply_variation(&mut self, variation: InstanceVariation) {
+        dispatch!(self, m => m.apply_variation(variation))
     }
 
     fn read_state(&self, out: &mut [Volt]) {

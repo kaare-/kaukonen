@@ -16,17 +16,17 @@ pub struct Cable {
 }
 
 #[derive(Clone, Debug)]
-pub struct PatchError {
+pub struct CableError {
     pub message: String,
 }
 
-impl std::fmt::Display for PatchError {
+impl std::fmt::Display for CableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.message)
     }
 }
 
-impl std::error::Error for PatchError {}
+impl std::error::Error for CableError {}
 
 #[derive(Clone, Debug)]
 pub struct Network {
@@ -89,20 +89,20 @@ impl Network {
         from_jack: &str,
         to: ModuleId,
         to_jack: &str,
-    ) -> Result<(), PatchError> {
-        let src = self.modules.get(from.0).ok_or_else(|| PatchError {
+    ) -> Result<(), CableError> {
+        let src = self.modules.get(from.0).ok_or_else(|| CableError {
             message: format!("unknown source module {}", from.0),
         })?;
-        let dst = self.modules.get(to.0).ok_or_else(|| PatchError {
+        let dst = self.modules.get(to.0).ok_or_else(|| CableError {
             message: format!("unknown destination module {}", to.0),
         })?;
-        let from_idx = src.jack_out(from_jack).ok_or_else(|| PatchError {
+        let from_idx = src.jack_out(from_jack).ok_or_else(|| CableError {
             message: format!(
                 "module '{}' has no output jack '{from_jack}'",
                 self.labels[from.0]
             ),
         })?;
-        let to_idx = dst.jack_in(to_jack).ok_or_else(|| PatchError {
+        let to_idx = dst.jack_in(to_jack).ok_or_else(|| CableError {
             message: format!(
                 "module '{}' has no input jack '{to_jack}'",
                 self.labels[to.0]

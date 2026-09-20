@@ -306,6 +306,10 @@ impl AnalogModule for Rc1 {
         STATE_FIELDS
     }
 
+    fn apply_variation(&mut self, variation: InstanceVariation) {
+        *self = Self::instantiate(self.params, variation);
+    }
+
     fn read_state(&self, out: &mut [Volt]) {
         let values = [self.state.v, self.state.r, self.state.s];
         for (slot, value) in out.iter_mut().zip(values) {

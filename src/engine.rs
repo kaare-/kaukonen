@@ -1,7 +1,7 @@
 //! Fixed-timestep simulation engine.
 
-use crate::module::{AnalogModule, ModuleOutputs};
-use crate::network::Network;
+use crate::module::{AnalogModule, ModuleOutputs, MAX_STATE};
+use crate::network::{ModuleId, Network};
 use crate::record::Recorder;
 use crate::types::{SimConfig, Volt};
 
@@ -66,15 +66,49 @@ impl Engine {
     }
 
     /// Channel names are `label.field`, e.g. `rc1_0.v` or `tc3.activity`.
+    ///
+    /// Internal states win over jacks of the same name, then output jack
+    /// voltages are searched, so `neuron0.out` is recordable too.
     pub fn lookup_channel(&self, name: &str) -> Option<Volt> {
         let (label, field) = name.split_once('.')?;
-        let idx = (0..self.network.len())
-            .find(|&i| self.network.label(crate::network::ModuleId(i)) == label)?;
-        self.network
-            .get(crate::network::ModuleId(idx))
-            .snapshot()
-            .into_iter()
-            .find(|(k, _)| *k == field)
-            .map(|(_, v)| v)
+        let idx = (0..self.network.len()).find(|&i| self.network.label(ModuleId(i)) == label)?;
+        let module = self.network.get(ModuleId(idx));
+        let fields = module.state_fields();
+        if let Some(slot) = fields.iter().position(|f| *f == field) {
+            let mut values = [0.0; MAX_STATE];
+            module.read_state(&mut values[..fields.len()]);
+            return Some(values[slot]);
+        }
+        let jack = module.jack_out(field)?;
+        Some(self.prev.get(idx).map_or(0.0, |outs| outs.get(jack)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::patch;
+
+    #[test]
+    fn channels_read_states_and_output_jacks() {
+        let built = patch::parse(
+            "module src source shape=dc volts=2\n\
+             module n neuron w0=1 leak=1 gain=3\n\
+             patch src.out -> n.in0\n",
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        let mut engine = Engine::new(built.network, built.config);
+        for _ in 0..20_000 {
+            engine.step();
+        }
+        let v = engine.lookup_channel("n.v").expect("state");
+        let out = engine.lookup_channel("n.out").expect("jack");
+        // Equilibrium of dV/dt = drive - leak*V is drive/leak.
+        assert!((v - 2.0).abs() < 0.01, "membrane settled at {v}");
+        assert!((out - 3.0 * (v * 0.6).tanh()).abs() < 1e-4, "out={out}");
+        assert!(engine.lookup_channel("n.nope").is_none());
+        assert!(engine.lookup_channel("nope.v").is_none());
     }
 }
