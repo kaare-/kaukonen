@@ -1,7 +1,6 @@
 //! Patchbay: module instances and voltage cables.
 
-use crate::module::{AnalogModule, Module, ModuleOutputs, MAX_PORTS};
-use crate::types::Volt;
+use crate::module::{AnalogModule, Module};
 
 /// Stable index of a module in the network. v1 never deletes modules.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -116,23 +115,6 @@ impl Network {
         });
         Ok(())
     }
-
-    /// Zero every input buffer, then sum cables from the previous outputs.
-    ///
-    /// This treats every cable as delayed by one step. The engine uses
-    /// [`crate::schedule::Schedule`] instead, which only delays cables that
-    /// close a cycle; this stays as the simple reference behaviour.
-    pub fn mix(&self, prev: &[ModuleOutputs]) -> Vec<[Volt; MAX_PORTS]> {
-        let mut inputs = vec![[0.0; MAX_PORTS]; self.modules.len()];
-        for cable in &self.cables {
-            let v = prev
-                .get(cable.from.0)
-                .map(|outs| outs.get(cable.from_jack))
-                .unwrap_or(0.0);
-            inputs[cable.to.0][cable.to_jack] += v;
-        }
-        inputs
-    }
 }
 
 impl Default for Network {
@@ -144,62 +126,44 @@ impl Default for Network {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::Engine;
     use crate::neuron::{Neuron, NeuronParams};
     use crate::source::Source;
-    use crate::types::DEFAULT_DT;
+    use crate::types::SimConfig;
 
     #[test]
     fn two_cables_into_one_jack_sum() {
         let mut net = Network::new();
         let a = net.add("a", Source::dc(1.5));
         let b = net.add("b", Source::dc(2.5));
-        let n = net.add("neuron", Neuron::new(NeuronParams::default()));
+        let n = net.add(
+            "neuron",
+            Neuron::new(NeuronParams {
+                leak: 1.0,
+                ..NeuronParams::default()
+            }),
+        );
         net.patch(a, "out", n, "in0").unwrap();
         net.patch(b, "out", n, "in0").unwrap();
 
-        let mut prev = vec![ModuleOutputs::empty(); 3];
-        prev[0] = ModuleOutputs::one(1.5);
-        prev[1] = ModuleOutputs::one(2.5);
-        let mixed = net.mix(&prev);
-        assert!((mixed[2][0] - 4.0).abs() < 1e-6);
+        let mut engine = Engine::new(net, SimConfig::control_rate());
+        for _ in 0..40_000 {
+            engine.step();
+        }
+        // Both sources reach the same jack, so the membrane settles at their
+        // sum over the leak.
+        let v = engine.lookup_channel("neuron.v").unwrap();
+        assert!((v - 4.0).abs() < 0.01, "membrane settled at {v}");
     }
 
     #[test]
-    fn two_cycle_stays_finite() {
+    fn unknown_jacks_are_refused_by_name() {
         let mut net = Network::new();
-        let n0 = net.add(
-            "n0",
-            Neuron::new(NeuronParams {
-                weights: [0.6, 0.0, 0.0, 0.0],
-                leak: 6.0,
-                gain: 3.0,
-                ..NeuronParams::default()
-            }),
-        );
-        let n1 = net.add(
-            "n1",
-            Neuron::new(NeuronParams {
-                weights: [-0.6, 0.0, 0.0, 0.0],
-                leak: 6.0,
-                gain: 3.0,
-                ..NeuronParams::default()
-            }),
-        );
-        net.patch(n0, "out", n1, "in0").unwrap();
-        net.patch(n1, "out", n0, "in0").unwrap();
-
-        let mut prev = vec![ModuleOutputs::one(1.0), ModuleOutputs::one(-0.5)];
-        for _ in 0..2000 {
-            let mixed = net.mix(&prev);
-            let mut next = Vec::new();
-            for (i, module) in net.modules_mut().iter_mut().enumerate() {
-                let n_in = module.input_count();
-                next.push(module.step(&mixed[i][..n_in], DEFAULT_DT));
-            }
-            prev = next;
-        }
-        for outs in &prev {
-            assert!(outs[0].is_finite());
-        }
+        let a = net.add("a", Source::dc(1.0));
+        let n = net.add("n", Neuron::new(NeuronParams::default()));
+        assert!(net.patch(a, "gate", n, "in0").is_err());
+        assert!(net.patch(a, "out", n, "in9").is_err());
+        let err = net.patch(a, "out", n, "in9").unwrap_err();
+        assert!(err.message.contains("input jack"), "{err}");
     }
 }

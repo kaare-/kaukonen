@@ -82,19 +82,11 @@ pub fn clamp_rail(v: Volt, rail: Volt) -> Volt {
     v.clamp(-rail, rail)
 }
 
-/// Soft saturation toward `±rail` without a hard corner.
-pub fn soft_rail(v: Volt, rail: Volt) -> Volt {
-    if rail <= 0.0 {
-        return 0.0;
-    }
-    rail * (v / rail).tanh()
-}
-
 /// Transparent below `knee`, then bends smoothly to a hard ceiling.
 ///
-/// A converter should not colour everything that passes through it, so unlike
-/// [`soft_rail`] this is exactly unity up to the knee and only rounds off the
-/// peaks above it. It never exceeds `ceiling`.
+/// A converter should not colour everything that passes through it, so this is
+/// exactly unity up to the knee and only rounds off the peaks above it. A plain
+/// tanh would compress the whole signal. It never exceeds `ceiling`.
 pub fn soft_clip(v: Volt, ceiling: Volt, knee: f32) -> Volt {
     if ceiling <= 0.0 {
         return 0.0;
