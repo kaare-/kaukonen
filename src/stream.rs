@@ -478,4 +478,117 @@ mod tests {
         );
         assert!(peak.is_finite());
     }
+
+    #[test]
+    fn duet_mic_steers_the_rack_not_the_speakers() {
+        // Speech is supposed to change the connectome and open a second take
+        // on the room, not leave the waveform on the converter. A 220 Hz
+        // tone through a dry path would stay highly correlated with the
+        // output; through this patch it should barely show, while the
+        // live and silent runs still diverge.
+        let text = std::fs::read_to_string("patches/duet.kpatch").unwrap();
+        let mut dry = Stream::new(built(&text));
+        let mut live = Stream::new(built(&text));
+        let rate = live.sample_rate();
+        let block = 512;
+        let channels = 2;
+        let warmup = 40;
+        let heard = 80;
+        let mut phase = 0.0f32;
+        let mut input = vec![0.0f32; block * channels];
+        let mut dry_buf = vec![0.0f32; block * channels];
+        let mut live_buf = vec![0.0f32; block * channels];
+        let mut in_left = Vec::with_capacity(heard * block);
+        let mut dry_left = Vec::with_capacity(heard * block);
+        let mut live_left = Vec::with_capacity(heard * block);
+
+        for block_i in 0..warmup + heard {
+            for frame in 0..block {
+                phase = (phase + 220.0 / rate).fract();
+                let sample = 0.5 * (phase * std::f32::consts::TAU).sin();
+                input[frame * channels] = sample;
+                input[frame * channels + 1] = sample;
+            }
+            dry.process(&mut dry_buf, channels);
+            live.process_duplex(&input, &mut live_buf, channels);
+            if block_i < warmup {
+                continue;
+            }
+            for frame in 0..block {
+                in_left.push(input[frame * channels]);
+                dry_left.push(dry_buf[frame * channels]);
+                live_left.push(live_buf[frame * channels]);
+            }
+        }
+
+        let r = pearson(&in_left, &live_left);
+        assert!(
+            r.abs() < 0.25,
+            "live input leaked onto the output (r = {r})"
+        );
+
+        let mut diff_energy = 0.0f32;
+        let mut dry_energy = 0.0f32;
+        for (a, b) in dry_left.iter().zip(&live_left) {
+            let d = a - b;
+            diff_energy += d * d;
+            dry_energy += a * a;
+        }
+        assert!(
+            diff_energy > dry_energy * 0.01,
+            "the microphone never moved the rack (diff {diff_energy} vs dry {dry_energy})"
+        );
+
+        let names = [
+            "adc.env",
+            "brain.norm",
+            "room.cutoff",
+            "air.cutoff",
+            "micamp.gain",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let dry_state = dry.engine_mut().snapshot_sample(&names);
+        let live_state = live.engine_mut().snapshot_sample(&names);
+        assert!(
+            live_state[0] > 0.05,
+            "the envelope never rose: {}",
+            live_state[0]
+        );
+        let moved = dry_state
+            .iter()
+            .zip(&live_state)
+            .skip(1)
+            .any(|(a, b)| (a - b).abs() > 0.02);
+        assert!(
+            moved,
+            "envelope rose but the rack state did not: dry {dry_state:?} live {live_state:?}"
+        );
+        assert!(live_left.iter().any(|s| s.abs() > 0.01));
+    }
+
+    fn pearson(a: &[f32], b: &[f32]) -> f32 {
+        let n = a.len() as f32;
+        if n == 0.0 {
+            return 0.0;
+        }
+        let ma = a.iter().sum::<f32>() / n;
+        let mb = b.iter().sum::<f32>() / n;
+        let mut num = 0.0;
+        let mut da = 0.0;
+        let mut db = 0.0;
+        for (x, y) in a.iter().zip(b) {
+            let dx = x - ma;
+            let dy = y - mb;
+            num += dx * dy;
+            da += dx * dx;
+            db += dy * dy;
+        }
+        if da == 0.0 || db == 0.0 {
+            0.0
+        } else {
+            num / (da.sqrt() * db.sqrt())
+        }
+    }
 }

@@ -150,7 +150,7 @@ rendered audio embedded so you can play it.
 | [`live.kpatch`](patches/live.kpatch) | Three cells at an audible rate are the whole sound source. Written for `play`, with the knobs worth turning listed in its comments. | yes |
 | [`voice.kpatch`](patches/voice.kpatch) | A percussive voice whose rhythm is RC-1 bursting. | yes |
 | [`listen.kpatch`](patches/listen.kpatch) | Recorded sound teaching a connectome, which colours it back. Needs `--in` or `--input`. | yes |
-| [`duet.kpatch`](patches/duet.kpatch) | A large dual-voice rack (twelve audible cells, a pulse bank, two memories, three filters) with a patch map on the live page. | yes |
+| [`duet.kpatch`](patches/duet.kpatch) | A large dual-voice rack (twelve audible cells, a pulse bank, two memories, three filters) with a patch map on the live page. The microphone envelope steers the banks and memories; the voice itself never reaches the speakers. | yes |
 | [`demo.kpatch`](patches/demo.kpatch) | The original small recurrent rack: stimulus, TC-3, two neurons, two cells, feedback. | no |
 | [`chaos.kpatch`](patches/chaos.kpatch) | Two cells cross-coupled in their chaotic window. `probe` this one. | no |
 | [`bank64.kpatch`](patches/bank64.kpatch) | Sixty-four mismatched cells weakly coupled through a changing connectome. | no |
