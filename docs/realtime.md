@@ -68,7 +68,8 @@ playable session: a slow climate that is often quiet, then bursts, walks a
 ring, opens a pair of oscillating cells, and granulates the weather through
 fast RC-1 clocks, neuron gates and a third memory. The doors sidechain each
 other so a squall is not one swell, and later stages write current back
-into the sky, the rain and the pair. Capture stirs the sky rather
+into the sky, the rain and the pair. A wide CV bandpass sits on the mix
+at the end and walks with the climate. Capture stirs the sky rather
 than sitting on the speakers. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
 

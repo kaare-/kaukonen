@@ -7,7 +7,7 @@ use crate::rc1::Rc1;
 use crate::source::Source;
 use crate::tc3::Tc3;
 use crate::types::{clamp_rail, InstanceVariation, Volt};
-use crate::util::{Env, Mix, Noise, Vca, Vcf, Vco};
+use crate::util::{Env, Mix, Noise, Svf, Vca, Vcf, Vco};
 
 /// Maximum jacks on any one module (TC-3 has 5 inputs / 4 outputs).
 pub const MAX_PORTS: usize = 8;
@@ -153,6 +153,7 @@ pub enum Module {
     AudioOut(AudioOut),
     Vco(Vco),
     Vcf(Vcf),
+    Svf(Svf),
     Vca(Vca),
     Mix(Mix),
     Env(Env),
@@ -171,6 +172,7 @@ macro_rules! dispatch {
             Module::AudioOut($inner) => $body,
             Module::Vco($inner) => $body,
             Module::Vcf($inner) => $body,
+            Module::Svf($inner) => $body,
             Module::Vca($inner) => $body,
             Module::Mix($inner) => $body,
             Module::Env($inner) => $body,
@@ -193,6 +195,7 @@ impl Module {
         ("audioout", || Module::AudioOut(AudioOut::new())),
         ("vco", || Module::Vco(Vco::new())),
         ("vcf", || Module::Vcf(Vcf::new())),
+        ("svf", || Module::Svf(Svf::new())),
         ("vca", || Module::Vca(Vca::new())),
         ("mix", || Module::Mix(Mix::new())),
         ("env", || Module::Env(Env::new())),
@@ -322,6 +325,12 @@ impl From<Vco> for Module {
 impl From<Vcf> for Module {
     fn from(m: Vcf) -> Self {
         Self::Vcf(m)
+    }
+}
+
+impl From<Svf> for Module {
+    fn from(m: Svf) -> Self {
+        Self::Svf(m)
     }
 }
 

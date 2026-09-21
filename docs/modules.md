@@ -141,6 +141,21 @@ Presets: subthreshold, pulse, tonic, burst.
 | `drive` | 0.1..10 | `1` | gain into the saturating feedback stage |
 | `level` | 0..4 | `1` | output scale |
 
+## `svf`
+
+- inputs: `in`, `cutoff_cv`, `q_cv`
+- outputs: `lp`, `hp`, `bp`
+- states: `cutoff`, `q`, `s1`, `s2`
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `cutoff` | 20..16000 Hz | `900 Hz` | centre of the band with no CV applied |
+| `cv_depth` | -4..4 | `1` | octaves of cutoff per volt on the CUTOFF CV jack |
+| `q` | 0.3..8 | `0.65` | selectivity; 0.5 is a large band, 4 is a peak |
+| `q_depth` | -2..2 | `0` | Q change per volt on the Q CV jack |
+| `drive` | 0.1..10 | `1` | gain into the integrator pair |
+| `level` | 0..4 | `1` | output scale |
+
 ## `vca`
 
 - inputs: `in`, `cv`

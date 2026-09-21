@@ -769,6 +769,31 @@ mod tests {
     }
 
     #[test]
+    fn weather_bandpass_walks_with_the_climate() {
+        // The final window has to move. If cutoff sits still the bandpass
+        // is just a fixed tone control.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let names = ["band[0].cutoff", "band[0].q"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut lo = f32::MAX;
+        let mut hi = 0.0f32;
+        let mut q_hi = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..4000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            lo = lo.min(now[0]);
+            hi = hi.max(now[0]);
+            q_hi = q_hi.max(now[1]);
+        }
+        assert!(hi > 1.35 * lo, "the band never walked: {lo} .. {hi}");
+        assert!(q_hi > 0.7, "grains never peaked the Q: {q_hi}");
+    }
+
+    #[test]
     fn weather_mic_steers_the_sky_not_the_speakers() {
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut dry = Stream::new(built(&text));

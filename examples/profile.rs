@@ -2,7 +2,7 @@ use kaukonen::module::AnalogModule;
 use kaukonen::neuron::{Neuron, NeuronParams};
 use kaukonen::rc1::{Rc1, Rc1Params};
 use kaukonen::tc3::{Tc3, Tc3Params};
-use kaukonen::util::{Vca, Vcf, Vco};
+use kaukonen::util::{Svf, Vca, Vcf, Vco};
 use kaukonen::{patch, Engine};
 use std::time::Instant;
 
@@ -34,6 +34,7 @@ fn main() {
     time_module("tc3", &mut Tc3::new(Tc3Params::default()), &[1.0; 5], steps);
     time_module("vco", &mut Vco::new(), &[0.0; 4], steps);
     time_module("vcf", &mut Vcf::new(), &[1.0, 0.0, 0.0], steps);
+    time_module("svf", &mut Svf::new(), &[1.0, 0.0, 0.0], steps);
     time_module("vca", &mut Vca::new(), &[1.0, 2.0], steps);
 
     println!("\nwhole-rack cost:");

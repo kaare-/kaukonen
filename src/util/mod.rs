@@ -9,6 +9,7 @@
 pub mod env;
 pub mod mix;
 pub mod noise;
+pub mod svf;
 pub mod vca;
 pub mod vcf;
 pub mod vco;
@@ -16,6 +17,7 @@ pub mod vco;
 pub use env::Env;
 pub use mix::Mix;
 pub use noise::Noise;
+pub use svf::Svf;
 pub use vca::Vca;
 pub use vcf::Vcf;
 pub use vco::Vco;

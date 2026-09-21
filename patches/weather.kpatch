@@ -22,6 +22,11 @@
 # and teaches the memories, so the next burst is not the last one
 # played backwards.
 #
+# A wide state-variable bandpass sits on the stereo mix at the end. The
+# climate walks its centre; a grain cloud briefly peaks the Q. It is a
+# large window, not another resonant ping, and a little of the dry mix
+# stays so the climate body is still there.
+#
 # The microphone never reaches the converter. Its envelope stirs the sky,
 # leans on the ring hops and the grit clocks, and teaches the memories.
 # Speech makes the weather turn over faster; it is not mixed in as a voice.
@@ -59,6 +64,9 @@
 #   set write.a0 0.14         # how hard that reading kicks the cell it read
 #   set recoil.a1 -0.12       # grains push the pair apart
 #   set lean.a0 0.1           # how much the grain sieve tilts the climate
+#   set band.cutoff 600       # centre of the final window; 400 is dark, 1600 is thin
+#   set band.q 0.45           # 0.4 is a large band, 2 is a wah
+#   set bandcv.a0 0.28        # how far sand walks the band
 #   set adc.gain 2.0          # how hard speech stirs the sky
 #   gain 0.5
 
@@ -128,7 +136,10 @@ module roomamp  vca       response=exponential gain=0.03 cv_depth=1.05
 module pairamp  vca       response=exponential gain=0.0 cv_depth=1.15
 module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
 module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
-module dac      audioout  rate=48000 level=0.32
+module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
+module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
+module end      mix[2]    a0=0.48 a1=0.72 level=0.95
+module dac      audioout  rate=48000 level=0.34
 
 knob flake[0].decay 0.008
 knob flake[1].decay 0.012
@@ -396,7 +407,19 @@ patch roomamp.out -> right.in0
 patch pairamp.out -> right.in1
 patch toneamp.out -> right.in2
 patch dustamp.out -> right.in3
-patch left.out    -> dac.left
-patch right.out   -> dac.right
+patch left.out     -> band[0].in
+patch right.out    -> band[1].in
+patch sand.activity -> bandcv.in0
+patch cloud.out     -> bandcv.in1
+patch after.out     -> bandcv.in2
+patch lean.out      -> bandcv.in3
+patch bandcv.out    -> band[*].cutoff_cv
+patch grain.out     -> band[*].q_cv
+patch left.out     -> end[0].in0
+patch band[0].bp   -> end[0].in1
+patch right.out    -> end[1].in0
+patch band[1].bp   -> end[1].in1
+patch end[0].out   -> dac.left
+patch end[1].out   -> dac.right
 
-record adc.env sky[0].v sky[1].v sky[3].v rain[0].v grit[0].v flake[0].out cloud.out after.out a.v echo[0].out write[0].out recoil.out sieve.out sand.activity dust.cutoff roomamp.gain pairamp.gain dustamp.gain
+record adc.env sky[0].v sky[1].v sky[3].v rain[0].v grit[0].v flake[0].out cloud.out after.out a.v echo[0].out write[0].out recoil.out sieve.out sand.activity dust.cutoff band[0].cutoff band[0].q roomamp.gain pairamp.gain dustamp.gain

@@ -1043,7 +1043,7 @@ function sendInput(extra) {
 
 const KIND_FILL = {
   audioin: '#14332a', audioout: '#1a2838', rc1: '#3b2f14', tc3: '#2a1f38',
-  neuron: '#331e2a', vcf: '#1a2e33', vca: '#1a2a22', vco: '#2a2418',
+  neuron: '#331e2a', vcf: '#1a2e33', svf: '#1a2e33', vca: '#1a2a22', vco: '#2a2418',
   mix: '#1b2028', env: '#2a2218', noise: '#222', source: '#1f2430'
 };
 
@@ -1343,6 +1343,7 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "recoil"));
         assert!(s.map.nodes.iter().any(|n| n.name == "cloud"));
         assert!(s.map.nodes.iter().any(|n| n.name == "roomcv"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "band"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
     }
