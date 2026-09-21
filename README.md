@@ -116,10 +116,11 @@ cargo build --release --features realtime
 ./target/release/kaukonen play --patch patches/live.kpatch --block 256 --gain 0.3
 ```
 
-macOS needs nothing extra for CoreAudio. `--input` is the one thing that
-triggers a microphone-permission prompt, under System Settings → Privacy &
-Security → Microphone. Bluetooth headphones add a lot of latency; the
-built-in speakers or a USB interface are the ones to tune `--block` against.
+macOS needs nothing extra for CoreAudio. Opening the microphone — `--input`
+at launch, or Capture on the control page — is the one thing that triggers
+a permission prompt, under System Settings → Privacy & Security →
+Microphone. Bluetooth headphones add a lot of latency; the built-in
+speakers or a USB interface are the ones to tune `--block` against.
 
 At the play prompt, `set cells.rate 400` and `gain 0.4` are the first two
 things worth trying. `help` lists the rest. Details in
@@ -184,7 +185,9 @@ cargo build --release --features realtime
 ```
 
 `play` opens a control page on loopback and the same console as before.
-Every knob is a slider; a bank name still sets every instance.
+Every knob is a slider; a bank name still sets every instance. Capture
+picks a microphone, a channel, and shows its level — the patch needs an
+`audioin` (`listen.kpatch` has one; `live.kpatch` does not).
 
 ```
 > set filt.cutoff 4000
@@ -201,9 +204,10 @@ kaukonen serve --patch patches/live.kpatch
 The device owns the clock, so the rack is rebuilt at the device's rate rather
 than resampled. `--block` pins the buffer size and reports the resulting latency,
 `--out-left`/`--out-right` route onto a multi-output interface, `--input` opens
-the capture side, and `--record` captures exactly what was sent. A status line
-reports peak level and how many buffers missed their deadline, which is the
-number to watch when tuning block size.
+the capture side at launch (or turn it on from the page), and `--record`
+captures exactly what was sent. A status line reports peak level and how
+many buffers missed their deadline, which is the number to watch when
+tuning block size.
 
 The simulator itself has no dependencies; hardware access is the one thing that
 needs one, so it sits behind the `realtime` feature. Details, including what has

@@ -15,10 +15,13 @@
 # A small steady FORGET keeps the memory turning over, so a later burst still
 # finds something to learn instead of arriving at an already-settled matrix.
 #
-# Needs a file to listen to:
+# Needs a file to listen to, or a microphone:
 #
 #   kaukonen render --patch patches/listen.kpatch --in your.wav \
 #       --out out/listen.wav --html out/listen.html --stride 16
+#
+#   kaukonen play --patch patches/listen.kpatch --block 256
+#   then Capture on the page, or `input on` at the console.
 #
 # With no --in the rack runs in silence, which is itself worth hearing: the
 # weights decay, ACTIVITY falls away, and nothing comes out.

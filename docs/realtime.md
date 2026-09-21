@@ -39,9 +39,10 @@ The default output is the built-in speakers. `--device "MacBook"` (or whatever
 once its driver is installed. Start with `--gain 0.3` — that is also the
 default — and watch `peak` in the status line before turning it up.
 
-`--input` is the one thing that needs a permission: System Settings →
-Privacy & Security → Microphone, and allow the terminal (or iTerm) that
-launched `kaukonen`. Without `--input` nothing asks.
+Opening the microphone needs a permission: System Settings → Privacy &
+Security → Microphone, and allow the terminal (or iTerm) that launched
+`kaukonen`. That happens for `--input` at launch, or the first time
+Capture is turned on from the page. Without either, nothing asks.
 
 Bluetooth headphones add tens of milliseconds and often hide their buffer
 size (`devices` then prints no range, and the status line cannot report
@@ -122,8 +123,10 @@ mono, and handed to every `audioin` in the patch.
 `play` opens `http://127.0.0.1:7420` and the same console as before. The page
 is the knobs — sliders honour each taper, a bank card sets every instance,
 gain / mute / quit sit at the top, and the peak meter is the same number
-the status line prints. Sound still leaves through the interface; the
-browser never sees audio.
+the status line prints. Under that, Capture picks a microphone and
+channel and shows the incoming level. The patch needs an `audioin`
+(`listen.kpatch` has one; `live.kpatch` does not). Sound still leaves
+through the interface; the browser never sees audio.
 
 `--port` picks the port, `--no-browser` skips opening one, `--no-web` is
 the console only. `kaukonen serve --patch patches/live.kpatch` is the same
@@ -158,6 +161,9 @@ panel    http://127.0.0.1:7420
 | `modules` | What is in the rack. |
 | `gain <value>` | Master output trim, on top of the patch's own levels. |
 | `mute` / `unmute` | Fade out and back in. |
+| `input on` / `input off` | Open or close the microphone. Optional device name. |
+| `input device <name>` | Pick a capture device (index or part of the name). |
+| `input channel <n>` | Pick a capture channel, numbered from 1. |
 | `stats` | Stream health now. |
 | `quit` | Fade out and stop. |
 

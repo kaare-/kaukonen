@@ -22,7 +22,129 @@ pub struct Surface {
     pub gain: f32,
     pub muted: bool,
     pub quit: bool,
+    pub input: InputView,
     pub modules: Vec<Bank>,
+}
+
+/// Capture side of the page: enable, device, channel, and what is plugged in.
+#[derive(Clone, Debug)]
+pub struct InputView {
+    /// The patch has an `audioin` the microphone can reach.
+    pub available: bool,
+    /// A capture stream is running.
+    pub enabled: bool,
+    /// Selected device name; empty means the host default.
+    pub device: String,
+    /// 1-based, as on the front of the box.
+    pub channel: usize,
+    /// How many channels the current device opened with.
+    pub channels: usize,
+    /// Devices `play` can open. Empty on `serve`.
+    pub devices: Vec<InputDevice>,
+    pub error: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct InputDevice {
+    pub name: String,
+    pub channels: u16,
+    pub is_default: bool,
+}
+
+impl Default for InputView {
+    fn default() -> Self {
+        Self {
+            available: false,
+            enabled: false,
+            device: String::new(),
+            channel: 1,
+            channels: 0,
+            devices: Vec::new(),
+            error: String::new(),
+        }
+    }
+}
+
+impl InputView {
+    /// Apply a POST. Refuses a patch with no `audioin`, or a channel the
+    /// current device does not have.
+    pub fn merge(
+        &self,
+        enabled: Option<bool>,
+        device: Option<String>,
+        channel: Option<usize>,
+    ) -> Result<Self, String> {
+        if !self.available {
+            return Err(
+                "this patch has no audioin module, so there is nothing for a microphone to reach"
+                    .to_string(),
+            );
+        }
+        let mut next = self.clone();
+        if let Some(on) = enabled {
+            next.enabled = on;
+        }
+        if let Some(name) = device {
+            next.device = name;
+            if let Some(found) = next.devices.iter().find(|d| d.name == next.device) {
+                next.channels = found.channels as usize;
+            }
+        }
+        if let Some(ch) = channel {
+            if ch < 1 {
+                return Err("channel is numbered from 1".to_string());
+            }
+            if next.channels > 0 && ch > next.channels {
+                return Err(format!(
+                    "channel {ch} is past this device's {} channel{}",
+                    next.channels,
+                    if next.channels == 1 { "" } else { "s" }
+                ));
+            }
+            next.channel = ch;
+        } else if next.channels > 0 && next.channel > next.channels {
+            next.channel = next.channels;
+        }
+        next.error.clear();
+        Ok(next)
+    }
+
+    fn write_json(&self, out: &mut String) {
+        out.push('{');
+        let _ = std::fmt::Write::write_fmt(
+            out,
+            format_args!(
+                "\"available\":{},\"enabled\":{},\"channel\":{},\"channels\":{}",
+                self.available, self.enabled, self.channel, self.channels
+            ),
+        );
+        out.push(',');
+        push_str(out, "device", &self.device);
+        out.push(',');
+        push_str(out, "error", &self.error);
+        out.push_str(",\"devices\":[");
+        for (i, device) in self.devices.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push('{');
+            push_str(out, "name", &device.name);
+            let _ = std::fmt::Write::write_fmt(
+                out,
+                format_args!(
+                    ",\"channels\":{},\"is_default\":{}",
+                    device.channels, device.is_default
+                ),
+            );
+            out.push('}');
+        }
+        out.push_str("]}");
+    }
+}
+
+/// Whether any module in the rack is an `audioin`.
+pub fn patch_has_audioin(built: &BuiltPatch) -> bool {
+    (0..built.network.len()).any(|i| built.network.get(ModuleId(i)).kind_name() == "audioin")
 }
 
 /// One declared module, or a whole bank under a single set of sliders.
@@ -79,6 +201,10 @@ impl Surface {
             gain,
             muted: false,
             quit: false,
+            input: InputView {
+                available: patch_has_audioin(built),
+                ..InputView::default()
+            },
             modules,
         }
     }
@@ -133,6 +259,8 @@ impl Surface {
                 self.quit
             ),
         );
+        out.push_str(",\"input\":");
+        self.input.write_json(&mut out);
         if !extra.is_empty() {
             out.push(',');
             out.push_str(extra);
@@ -215,6 +343,14 @@ pub trait Host: Send + Sync + 'static {
     fn set_knob(&self, modules: &[usize], knob: &'static str, value: f32) -> Result<(), String>;
     fn set_gain(&self, value: f32) -> Result<(), String>;
     fn set_mute(&self, muted: bool) -> Result<(), String>;
+    /// Open, close, or retarget capture. `serve` refuses an enable.
+    fn set_input(&self, wanted: &InputView) -> Result<InputView, String> {
+        if wanted.enabled {
+            Err("open with play to use a microphone. serve has no audio.".to_string())
+        } else {
+            Ok(wanted.clone())
+        }
+    }
     fn extra_json(&self) -> String {
         String::new()
     }
@@ -432,6 +568,62 @@ fn handle_client(
                 write_response(&mut stream, 200, "application/json", b"{\"ok\":true}")?;
             }
         }
+        ("POST", "/api/input") => {
+            let enabled = json_bool(body, "enabled");
+            let device = json_string(body, "device");
+            let channel = json_f32(body, "channel").map(|v| v.round() as usize);
+            let merged = match surface.lock() {
+                Ok(s) => s.input.merge(enabled, device, channel),
+                Err(_) => Err("the panel is locked".to_string()),
+            };
+            match merged {
+                Ok(wanted) => match host.set_input(&wanted) {
+                    Ok(state) => {
+                        if let Ok(mut s) = surface.lock() {
+                            let devices = std::mem::take(&mut s.input.devices);
+                            s.input = state;
+                            if s.input.devices.is_empty() {
+                                s.input.devices = devices;
+                            }
+                            s.input.error.clear();
+                        }
+                        let label = if wanted.enabled {
+                            if wanted.device.is_empty() {
+                                "input on".to_string()
+                            } else {
+                                format!("input {} ch {}", wanted.device, wanted.channel)
+                            }
+                        } else {
+                            "input off".to_string()
+                        };
+                        println!("  {label}");
+                        write_response(&mut stream, 200, "application/json", b"{\"ok\":true}")?;
+                    }
+                    Err(e) => {
+                        if let Ok(mut s) = surface.lock() {
+                            s.input.error = e.clone();
+                            if enabled == Some(true) {
+                                s.input.enabled = false;
+                            }
+                        }
+                        write_response(
+                            &mut stream,
+                            400,
+                            "application/json",
+                            error_json(&e).as_bytes(),
+                        )?;
+                    }
+                },
+                Err(err) => {
+                    write_response(
+                        &mut stream,
+                        400,
+                        "application/json",
+                        error_json(&err).as_bytes(),
+                    )?;
+                }
+            }
+        }
         ("POST", "/api/quit") => {
             if let Ok(mut s) = surface.lock() {
                 s.quit = true;
@@ -604,13 +796,18 @@ header { display: flex; justify-content: space-between; gap: 24px;
 .stat b { color: #e5e7eb; font-weight: 600; }
 .transport { display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
              background: #12151a; border: 1px solid #23282f; border-radius: 8px;
-             padding: 12px 14px; margin-bottom: 20px; }
+             padding: 12px 14px; margin-bottom: 12px; }
 .transport label { font-size: 12px; color: #9ca3af; }
 .transport .val { font-variant-numeric: tabular-nums; min-width: 3.5em; }
+.transport select { background: #1b1f26; color: #e5e7eb; border: 1px solid #2d333b;
+                    border-radius: 4px; padding: 4px 8px; max-width: 260px; }
 button { background: #1b1f26; color: #e5e7eb; border: 1px solid #2d333b;
          border-radius: 5px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
 button:hover { border-color: #4b5563; }
+button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
+button.on { border-color: #065f46; color: #6ee7b7; }
 button.danger { border-color: #7f1d1d; color: #fecaca; }
+.note { color: #9ca3af; font-size: 12px; margin: -4px 0 18px; min-height: 1.2em; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 14px; }
 .card { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
@@ -650,9 +847,21 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
   <button id="mute">mute</button>
   <button id="quit" class="danger">quit</button>
 </div>
+<div class="transport" id="inputrow">
+  <label>capture</label>
+  <button id="capture">off</button>
+  <label for="indevice">device</label>
+  <select id="indevice"></select>
+  <label for="inchannel">ch</label>
+  <select id="inchannel"></select>
+  <div class="peak" id="inpeakbar"><i id="inpeakfill"></i></div>
+  <div class="stat">in <b id="inpeak">—</b></div>
+</div>
+<p class="note" id="inputhint"></p>
 <div class="grid" id="grid"></div>
-<p class="hint">Sound comes out of the audio interface, not this page. These
-are the same knobs as <code>set cells.rate 400</code> at the console.
+<p class="hint">Sound comes out of the audio interface, not this page. A
+microphone goes in the same way — the browser never sees audio. These are
+the same knobs as <code>set cells.rate 400</code> at the console.
 A bank slider sets every instance.</p>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -701,6 +910,7 @@ function render(state) {
   }
   if (state.elapsed != null) $('elapsed').textContent = Number(state.elapsed).toFixed(1);
   if (state.late != null) $('late').textContent = state.late;
+  renderInput(state);
   const grid = $('grid');
   if (grid.childElementCount === 0) {
     state.modules.forEach(mod => grid.appendChild(card(mod)));
@@ -718,6 +928,86 @@ function render(state) {
       });
     });
   }
+}
+
+function renderInput(state) {
+  const inp = state.input || {};
+  const hint = $('inputhint');
+  const can = !!inp.available;
+  const listed = inp.devices && inp.devices.length;
+  $('capture').disabled = !can || !listed;
+  $('indevice').disabled = !can || !listed;
+  $('inchannel').disabled = !can || !listed;
+  $('capture').textContent = inp.enabled ? 'on' : 'off';
+  $('capture').className = inp.enabled ? 'on' : '';
+  if (inp.error) {
+    hint.textContent = inp.error;
+  } else if (!can) {
+    hint.textContent = 'this patch has no audioin, so a microphone has nowhere to go. listen.kpatch has one.';
+  } else if (!listed) {
+    hint.textContent = 'open with play to pick a microphone. serve has no audio.';
+  } else {
+    hint.textContent = '';
+  }
+  fillDevices(inp);
+  fillChannels(inp);
+  if (state.input_peak != null) {
+    const p = Math.min(1, Number(state.input_peak) || 0);
+    $('inpeak').textContent = p.toFixed(3);
+    $('inpeakfill').style.width = (p * 100) + '%';
+    const bar = $('inpeakbar');
+    bar.className = 'peak' + (p > 0.95 ? ' clip' : p > 0.7 ? ' hot' : '');
+  }
+}
+
+function fillDevices(inp) {
+  const sel = $('indevice');
+  const devices = inp.devices || [];
+  const names = devices.map(d => d.name).join('\0');
+  if (sel.dataset.names !== names) {
+    sel.dataset.names = names;
+    sel.innerHTML = '';
+    if (!devices.length) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'no input device';
+      sel.appendChild(o);
+    } else {
+      devices.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.name;
+        o.textContent = d.name + (d.is_default ? '  (default)' : '');
+        sel.appendChild(o);
+      });
+    }
+  }
+  if (!dragging.has('indevice') && inp.device) sel.value = inp.device;
+}
+
+function fillChannels(inp) {
+  const sel = $('inchannel');
+  const n = Math.max(inp.channels || 0, inp.channel || 1, 1);
+  if (sel.dataset.n !== String(n)) {
+    sel.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = String(i);
+      sel.appendChild(o);
+    }
+    sel.dataset.n = String(n);
+  }
+  if (!dragging.has('inchannel')) sel.value = String(inp.channel || 1);
+}
+
+function sendInput(extra) {
+  const body = {
+    enabled: $('capture').textContent === 'on',
+    device: $('indevice').value,
+    channel: Number($('inchannel').value) || 1
+  };
+  Object.assign(body, extra || {});
+  post('/api/input', body);
 }
 
 function card(mod) {
@@ -812,6 +1102,19 @@ $('gain').addEventListener('input', () => {
 });
 $('mute').addEventListener('click', () => post('/api/mute', { muted: !muted }));
 $('quit').addEventListener('click', () => post('/api/quit', {}));
+$('capture').addEventListener('click', () => {
+  sendInput({ enabled: $('capture').textContent !== 'on' });
+});
+$('indevice').addEventListener('pointerdown', () => dragging.add('indevice'));
+$('indevice').addEventListener('change', () => {
+  dragging.delete('indevice');
+  sendInput({ device: $('indevice').value, channel: 1 });
+});
+$('inchannel').addEventListener('pointerdown', () => dragging.add('inchannel'));
+$('inchannel').addEventListener('change', () => {
+  dragging.delete('inchannel');
+  sendInput({ channel: Number($('inchannel').value) || 1 });
+});
 poll();
 </script>
 </body></html>
@@ -826,6 +1129,12 @@ mod tests {
         let text = std::fs::read_to_string("patches/live.kpatch").unwrap();
         let built = patch::parse(&text).unwrap().build().unwrap();
         Surface::from_built("patches/live.kpatch", "test device", 0.3, &built)
+    }
+
+    fn listen_surface() -> Surface {
+        let text = std::fs::read_to_string("patches/listen.kpatch").unwrap();
+        let built = patch::parse(&text).unwrap().build().unwrap();
+        Surface::from_built("patches/listen.kpatch", "test device", 0.3, &built)
     }
 
     #[test]
@@ -878,7 +1187,40 @@ mod tests {
         assert!(json.contains("\"name\":\"rate\""));
         assert!(json.contains("\"taper\":\"log\""));
         assert!(json.contains("\"elapsed\":1.5"));
+        assert!(json.contains("\"available\":false"));
         assert!(!json.contains("NaN"));
+    }
+
+    #[test]
+    fn live_has_no_audioin_and_listen_does() {
+        assert!(!live_surface().input.available);
+        assert!(listen_surface().input.available);
+        let err = live_surface()
+            .input
+            .merge(Some(true), None, None)
+            .unwrap_err();
+        assert!(err.contains("audioin"), "{err}");
+    }
+
+    #[test]
+    fn input_merge_checks_the_channel() {
+        let mut s = listen_surface();
+        s.input.devices.push(InputDevice {
+            name: "Mic".into(),
+            channels: 2,
+            is_default: true,
+        });
+        s.input.channels = 2;
+        let next = s
+            .input
+            .merge(Some(true), Some("Mic".into()), Some(2))
+            .unwrap();
+        assert!(next.enabled);
+        assert_eq!(next.channel, 2);
+        let err = s.input.merge(None, None, Some(3)).unwrap_err();
+        assert!(err.contains("channel 3"), "{err}");
+        let err = s.input.merge(None, None, Some(0)).unwrap_err();
+        assert!(err.contains("numbered from 1"), "{err}");
     }
 
     #[test]
@@ -905,6 +1247,11 @@ mod tests {
         assert!(PAGE.contains("id=\"grid\""));
         assert!(PAGE.contains("/api/set"));
         assert!(PAGE.contains("fromNorm"));
+        assert!(PAGE.contains("/api/input"));
+        assert!(PAGE.contains("id=\"capture\""));
+        assert!(PAGE.contains("id=\"indevice\""));
+        assert!(PAGE.contains("id=\"inchannel\""));
+        assert!(PAGE.contains("id=\"inpeak\""));
     }
 
     #[test]
@@ -932,6 +1279,33 @@ mod tests {
             .unwrap();
         assert!((rate.value - 512.0).abs() < 1e-3);
         panel.stop.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn serve_refuses_to_open_a_microphone() {
+        let surface = listen_surface();
+        let panel = start(surface, Arc::new(Silent), 0).expect("bind");
+        let base = url(panel.addr);
+        let state = get(&format!("{base}/api/state"));
+        assert!(state.contains("\"available\":true"), "{state}");
+        assert!(state.contains("\"devices\":[]"), "{state}");
+        let refused = post(
+            &format!("{base}/api/input"),
+            r#"{"enabled":true,"channel":1}"#,
+        );
+        assert!(refused.contains("\"ok\":false"), "{refused}");
+        assert!(refused.contains("play"), "{refused}");
+        let channel = post(&format!("{base}/api/input"), r#"{"channel":1}"#);
+        assert!(channel.contains("\"ok\":true"), "{channel}");
+        let live = live_surface();
+        let live_panel = start(live, Arc::new(Silent), 0).expect("bind");
+        let no_adc = post(
+            &format!("{}/api/input", url(live_panel.addr)),
+            r#"{"enabled":true}"#,
+        );
+        assert!(no_adc.contains("audioin"), "{no_adc}");
+        panel.stop.store(true, Ordering::Relaxed);
+        live_panel.stop.store(true, Ordering::Relaxed);
     }
 
     fn get(url: &str) -> String {

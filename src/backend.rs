@@ -410,6 +410,7 @@ pub struct Stats {
     peak_bits: AtomicU32,
     pub input_starved: AtomicU64,
     pub record_dropped: AtomicU64,
+    input_peak_bits: AtomicU32,
 }
 
 impl Stats {
@@ -421,6 +422,19 @@ impl Stats {
         // Only the audio thread writes, so a plain store is enough.
         current = value;
         self.peak_bits.store(current.to_bits(), Ordering::Relaxed);
+    }
+
+    fn observe_input_peak(&self, value: f32) {
+        let current = f32::from_bits(self.input_peak_bits.load(Ordering::Relaxed));
+        if value > current {
+            self.input_peak_bits
+                .store(value.to_bits(), Ordering::Relaxed);
+        }
+    }
+
+    /// Largest absolute input sample seen since the last take.
+    pub fn input_peak(&self) -> f32 {
+        f32::from_bits(self.input_peak_bits.load(Ordering::Relaxed))
     }
 
     /// Current peak, without resetting it. The control page polls this.
@@ -534,6 +548,10 @@ pub struct Playback {
     pub record: Option<Arc<RecordStage>>,
     pub negotiated: Negotiated,
     pub finished: Arc<AtomicBool>,
+    /// Always present so the page can open a microphone after launch.
+    pub ring: Arc<Ring>,
+    pub input_on: Arc<AtomicBool>,
+    pub input_channel: Arc<AtomicUsize>,
 }
 
 impl Playback {
@@ -547,6 +565,14 @@ impl Playback {
     /// the audio thread without holding the cpal stream.
     pub fn control(&self) -> Sender<Control> {
         self.control.clone()
+    }
+
+    /// Swap the capture stream. `None` stops the microphone.
+    ///
+    /// Must be called from the thread that opened the original streams:
+    /// cpal's handle is not `Send` on every host.
+    pub fn replace_input(&mut self, stream: Option<cpal::Stream>) {
+        self._input = stream;
     }
 
     /// Fade out and let the tail through, so stopping does not click.
@@ -594,20 +620,27 @@ pub fn play(mut rack: Rack, device: &Device, options: PlayOptions) -> Result<Pla
         })
     });
 
-    // Input, if asked for, arrives through a ring a few blocks deep.
-    let ring = options.input.as_ref().map(|(_, input_config)| {
-        let depth = input_config.block().unwrap_or(1024) as usize * 8;
-        Arc::new(Ring::new(depth.max(4096)))
-    });
+    // The ring is always there so the page can open a microphone after
+    // launch without touching the audio thread's allocations.
+    let depth = options
+        .input
+        .as_ref()
+        .and_then(|(_, c)| c.block())
+        .or(negotiated.block())
+        .unwrap_or(1024) as usize
+        * 8;
+    let ring = Arc::new(Ring::new(depth.max(4096)));
+    let input_on = Arc::new(AtomicBool::new(options.input.is_some()));
+    let input_channel = Arc::new(AtomicUsize::new(options.routing.input));
 
-    let input_stream = match (&options.input, &ring) {
-        (Some((input_device, input_config)), Some(ring)) => Some(build_input(
+    let input_stream = match &options.input {
+        Some((input_device, input_config)) => Some(build_input(
             input_device,
             input_config,
-            options.routing.input,
-            Arc::clone(ring),
+            Arc::clone(&input_channel),
+            Arc::clone(&ring),
         )?),
-        _ => None,
+        None => None,
     };
 
     let mut writer = Writer {
@@ -621,7 +654,8 @@ pub fn play(mut rack: Rack, device: &Device, options: PlayOptions) -> Result<Pla
         control: control_rx,
         stats: Arc::clone(&stats),
         record: record.clone(),
-        ring: ring.clone(),
+        ring: Arc::clone(&ring),
+        input_on: Arc::clone(&input_on),
         finished: Arc::clone(&finished),
         scratch: vec![0.0; 4096],
         captured: vec![0.0; 4096],
@@ -682,24 +716,36 @@ pub fn play(mut rack: Rack, device: &Device, options: PlayOptions) -> Result<Pla
         record,
         negotiated,
         finished,
+        ring,
+        input_on,
+        input_channel,
     })
 }
 
-fn build_input(
+/// Open a capture stream that writes one channel into `ring`.
+///
+/// The channel index is live: the page can change it without restarting.
+pub fn build_input(
     device: &Device,
     config: &Negotiated,
-    channel: usize,
+    channel: Arc<AtomicUsize>,
     ring: Arc<Ring>,
 ) -> Result<cpal::Stream, String> {
     let channels = config.channels();
-    let take = channel.min(channels.saturating_sub(1));
     let on_error = |err| eprintln!("audio input error: {err}");
     let stream = match config.format {
         SampleFormat::F32 => device.build_input_stream(
             &config.config,
-            move |buffer: &[f32], _| {
-                for frame in buffer.chunks(channels) {
-                    ring.push(frame.get(take).copied().unwrap_or(0.0));
+            {
+                let channel = Arc::clone(&channel);
+                let ring = Arc::clone(&ring);
+                move |buffer: &[f32], _| {
+                    let take = channel
+                        .load(Ordering::Relaxed)
+                        .min(channels.saturating_sub(1));
+                    for frame in buffer.chunks(channels) {
+                        ring.push(frame.get(take).copied().unwrap_or(0.0));
+                    }
                 }
             },
             on_error,
@@ -708,8 +754,12 @@ fn build_input(
         SampleFormat::I16 => device.build_input_stream(
             &config.config,
             move |buffer: &[i16], _| {
+                let take = channel
+                    .load(Ordering::Relaxed)
+                    .min(channels.saturating_sub(1));
+                let sample_scale = 1.0 / I16_SCALE;
                 for frame in buffer.chunks(channels) {
-                    let sample = frame.get(take).copied().unwrap_or(0) as f32 / I16_SCALE;
+                    let sample = frame.get(take).copied().unwrap_or(0) as f32 * sample_scale;
                     ring.push(sample);
                 }
             },
@@ -719,6 +769,21 @@ fn build_input(
         other => return Err(format!("unhandled input sample format {other:?}")),
     }
     .map_err(|e| format!("{}: cannot open the input stream: {e}", config.device_name))?;
+    Ok(stream)
+}
+
+/// Build and start a capture stream. Used when the page opens the mic
+/// after launch, on the same thread that opened the original streams.
+pub fn start_input(
+    device: &Device,
+    config: &Negotiated,
+    channel: Arc<AtomicUsize>,
+    ring: Arc<Ring>,
+) -> Result<cpal::Stream, String> {
+    let stream = build_input(device, config, channel, ring)?;
+    stream
+        .play()
+        .map_err(|e| format!("cannot start the input stream: {e}"))?;
     Ok(stream)
 }
 
@@ -734,7 +799,8 @@ struct Writer {
     control: Receiver<Control>,
     stats: Arc<Stats>,
     record: Option<Arc<RecordStage>>,
-    ring: Option<Arc<Ring>>,
+    ring: Arc<Ring>,
+    input_on: Arc<AtomicBool>,
     finished: Arc<AtomicBool>,
     /// Reused buffer for the rack's own stereo output.
     scratch: Vec<f32>,
@@ -774,30 +840,31 @@ impl Writer {
             self.captured.resize(needed, 0.0);
         }
 
-        // Pull input through the ring, padding with silence if it is behind.
-        let live = match &self.ring {
-            Some(ring) => {
-                let mut starved = 0u64;
-                for frame in 0..frames {
-                    let sample = match ring.pop() {
-                        Some(sample) => sample,
-                        None => {
-                            starved += 1;
-                            0.0
-                        }
-                    };
-                    self.captured[frame * 2] = sample;
-                    self.captured[frame * 2 + 1] = sample;
-                }
-                if starved > 0 {
-                    self.stats
-                        .input_starved
-                        .fetch_add(starved, Ordering::Relaxed);
-                }
-                true
+        // Pull input through the ring only while capture is on. An empty
+        // ring with capture off must not override a loaded file.
+        let live = self.input_on.load(Ordering::Relaxed);
+        if live {
+            let mut starved = 0u64;
+            let mut in_peak = 0.0f32;
+            for frame in 0..frames {
+                let sample = match self.ring.pop() {
+                    Some(sample) => sample,
+                    None => {
+                        starved += 1;
+                        0.0
+                    }
+                };
+                in_peak = in_peak.max(sample.abs());
+                self.captured[frame * 2] = sample;
+                self.captured[frame * 2 + 1] = sample;
             }
-            None => false,
-        };
+            self.stats.observe_input_peak(in_peak);
+            if starved > 0 {
+                self.stats
+                    .input_starved
+                    .fetch_add(starved, Ordering::Relaxed);
+            }
+        }
 
         // Disjoint fields, so the rack can read one buffer and write the other.
         let captured = &self.captured[..needed];
@@ -1022,5 +1089,14 @@ mod tests {
         stats.observe_peak(0.2);
         assert!((stats.take_peak() - 0.9).abs() < 1e-6);
         assert_eq!(stats.take_peak(), 0.0);
+    }
+
+    #[test]
+    fn input_peak_keeps_the_largest_sample() {
+        let stats = Stats::default();
+        stats.observe_input_peak(0.2);
+        stats.observe_input_peak(0.8);
+        stats.observe_input_peak(0.1);
+        assert!((stats.input_peak() - 0.8).abs() < 1e-6);
     }
 }

@@ -18,7 +18,7 @@ use kaukonen::patch;
 use kaukonen::wav::{Audio, SampleFormat};
 use kaukonen::Stream;
 
-use crate::panel::{self, Host, Surface};
+use crate::panel::{self, Host, InputDevice, InputView, Surface};
 
 /// How often the console prints a line of stream health while playing.
 const REPORT_INTERVAL: Duration = Duration::from_secs(2);
@@ -217,10 +217,11 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     // A directory of every knob, so the console can resolve names without
     // touching the rack once the audio thread owns it.
     let directory = Directory::of(&built);
-    let surface = args
+    let mut surface = args
         .web
         .then(|| Surface::from_built(args.source, &output.device_name, args.gain, &built));
     let rack = Stream::new(built);
+    let has_adc = rack.has_input();
     if !rack.has_output() {
         return Err(format!(
             "{} has no audioout module, so there is nothing to play. Add one and patch \
@@ -269,7 +270,10 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     println!("knobs on {}", directory.summary().join("  "));
     println!();
 
-    let playback = backend::play(
+    let input_label = input.as_ref().map(|(_, config)| config.device_name.clone());
+    let input_channels = input.as_ref().map(|(_, config)| config.channels());
+
+    let mut playback = backend::play(
         rack,
         &device,
         PlayOptions {
@@ -285,12 +289,48 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
         then_stop: false,
     });
 
+    let (input_tx, input_rx) = mpsc::channel::<InputCmd>();
+    let mut capture = InputView {
+        available: has_adc,
+        enabled: playback.input_on.load(Ordering::Relaxed),
+        device: input_label.clone().unwrap_or_default(),
+        channel: args.routing.input + 1,
+        channels: input_channels.unwrap_or(0),
+        devices: Vec::new(),
+        error: String::new(),
+    };
+    if let Some(surface) = surface.as_mut() {
+        surface.input.available = has_adc;
+        surface.input.devices = list_input_devices();
+        surface.input.enabled = capture.enabled;
+        surface.input.channel = capture.channel;
+        if capture.device.is_empty() {
+            if let Some(default) = surface
+                .input
+                .devices
+                .iter()
+                .find(|d| d.is_default)
+                .or_else(|| surface.input.devices.first())
+            {
+                surface.input.device = default.name.clone();
+                surface.input.channels = default.channels as usize;
+                capture.device = default.name.clone();
+                capture.channels = default.channels as usize;
+            }
+        } else {
+            surface.input.device = capture.device.clone();
+            surface.input.channels = capture.channels;
+        }
+    }
+
     let started = Instant::now();
     let panel = match surface {
         Some(surface) => {
             let host = Arc::new(PlayHost {
                 control: playback.control(),
+                input: input_tx,
                 stats: Arc::clone(&playback.stats),
+                input_on: Arc::clone(&playback.input_on),
                 rate: playback.negotiated.sample_rate(),
                 started,
             });
@@ -314,7 +354,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
 
     println!("playing. Type `help` for the controls, `quit` to stop.");
     if panel.is_some() {
-        println!("         knobs are also on the page.");
+        println!("         knobs and the microphone are also on the page.");
     }
 
     // Draining has to be independent of the console, or an interactive session
@@ -361,7 +401,29 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
         });
     }
 
+    let output_rate = playback.negotiated.sample_rate();
+    let output_block = playback.negotiated.block();
+
     loop {
+        while let Ok(cmd) = input_rx.try_recv() {
+            match cmd {
+                InputCmd::Set(wanted, reply) => {
+                    let result = apply_input(
+                        &mut playback,
+                        &mut capture,
+                        &wanted,
+                        output_rate,
+                        output_block,
+                    );
+                    if let Ok(state) = &result {
+                        if let Some(panel) = &panel {
+                            sync_surface_input(Some(panel.surface.as_ref()), state);
+                        }
+                    }
+                    let _ = reply.send(result);
+                }
+            }
+        }
         if let Some(limit) = args.seconds {
             if started.elapsed().as_secs_f32() >= limit {
                 break;
@@ -375,14 +437,23 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
         }
         if !args.quiet && last_report.elapsed() >= REPORT_INTERVAL {
             last_report = Instant::now();
-            report(&playback, started);
+            report(&playback, &capture, started);
         }
 
         match line_rx.recv_timeout(Duration::from_millis(50)) {
             Ok(Err(e)) => return Err(format!("cannot read from the console: {e}")),
             Ok(Ok(line)) => {
                 let surface = panel.as_ref().map(|p| p.surface.as_ref());
-                if !handle(&line, &playback, &directory, started, surface)? {
+                if !handle(
+                    &line,
+                    &mut playback,
+                    &mut capture,
+                    output_rate,
+                    output_block,
+                    &directory,
+                    started,
+                    surface,
+                )? {
                     break;
                 }
             }
@@ -409,7 +480,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     if let Some(handle) = drain {
         let _ = handle.join();
     }
-    report(&playback, started);
+    report(&playback, &capture, started);
 
     if let Some(path) = args.record {
         let samples = collected.lock().map(|s| s.clone()).unwrap_or_default();
@@ -437,7 +508,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     Ok(())
 }
 
-fn report(playback: &backend::Playback, started: Instant) {
+fn report(playback: &backend::Playback, capture: &InputView, started: Instant) {
     let stats = &playback.stats;
     let blocks = stats.blocks.load(Ordering::Relaxed);
     let late = stats.late.load(Ordering::Relaxed);
@@ -463,6 +534,9 @@ fn report(playback: &backend::Playback, started: Instant) {
     let starved = stats.input_starved.load(Ordering::Relaxed);
     if starved > 0 {
         line.push_str(&format!("  input short {starved}"));
+    }
+    if capture.enabled {
+        line.push_str(&format!("  in {:.3}", stats.input_peak()));
     }
     println!("{line}");
     if late > 0 {
@@ -577,9 +651,13 @@ impl Directory {
 }
 
 /// Handle one console line. Returns false to stop playing.
+#[allow(clippy::too_many_arguments)]
 fn handle(
     line: &str,
-    playback: &backend::Playback,
+    playback: &mut backend::Playback,
+    capture: &mut InputView,
+    rate: u32,
+    block: Option<u32>,
     directory: &Directory,
     started: Instant,
     surface: Option<&Mutex<Surface>>,
@@ -605,9 +683,12 @@ fn handle(
             println!("  modules                       list what is in the rack");
             println!("  gain <value>                  master output trim");
             println!("  mute / unmute                 fade out and back in");
+            println!("  input on|off [device]         open or close the microphone");
+            println!("  input device <name>           pick a capture device");
+            println!("  input channel <n>             pick a capture channel (from 1)");
             println!("  stats                         print stream health now");
             println!("  quit                          fade out and stop");
-            println!("  the same knobs are on the browser page if a panel is running");
+            println!("  knobs and capture are also on the browser page if a panel is running");
         }
         "modules" => {
             for entry in &directory.entries {
@@ -707,7 +788,44 @@ fn handle(
             }
             println!("  unmuted");
         }
-        "stats" => report(playback, started),
+        "input" => {
+            let mut wanted = capture.clone();
+            match rest.first().copied().unwrap_or("status") {
+                "status" | "stat" => {
+                    println!("  {}", describe_input(capture));
+                    return Ok(true);
+                }
+                "on" | "enable" => {
+                    wanted.enabled = true;
+                    if let Some(name) = rest.get(1) {
+                        wanted.device = (*name).to_string();
+                    }
+                }
+                "off" | "disable" => wanted.enabled = false,
+                "device" => {
+                    wanted.device = rest
+                        .get(1)
+                        .ok_or("input device needs a name or index")?
+                        .to_string();
+                }
+                "channel" | "ch" => {
+                    let ch: usize = rest
+                        .get(1)
+                        .ok_or("input channel needs a number")?
+                        .parse()
+                        .map_err(|_| "input channel wants a whole number".to_string())?;
+                    wanted.channel = ch;
+                }
+                other => {
+                    println!("  unknown input command '{other}'. Try on, off, device, channel.");
+                    return Ok(true);
+                }
+            }
+            let state = apply_input(playback, capture, &wanted, rate, block)?;
+            sync_surface_input(surface, &state);
+            println!("  {}", describe_input(&state));
+        }
+        "stats" => report(playback, capture, started),
         other => println!("  unknown command '{other}'. Type `help`."),
     }
     let _ = std::io::stdout().flush();
@@ -722,13 +840,144 @@ fn or_none(text: &str) -> String {
     }
 }
 
+/// A change the page asked the play thread to make to capture.
+///
+/// The cpal input stream is `!Send`, so opening it has to happen on the
+/// thread that already holds `Playback`.
+enum InputCmd {
+    Set(InputView, mpsc::Sender<Result<InputView, String>>),
+}
+
+fn list_input_devices() -> Vec<InputDevice> {
+    match backend::survey(Direction::Input) {
+        Ok(reports) => reports
+            .into_iter()
+            .map(|report| InputDevice {
+                name: report.name,
+                channels: report.channels.iter().copied().max().unwrap_or(1),
+                is_default: report.is_default,
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn describe_input(input: &InputView) -> String {
+    if !input.available {
+        return "this patch has no audioin".to_string();
+    }
+    if !input.enabled {
+        return "input off".to_string();
+    }
+    if input.device.is_empty() {
+        format!("input on, channel {}", input.channel)
+    } else {
+        format!("input {} ch {}", input.device, input.channel)
+    }
+}
+
+fn sync_surface_input(surface: Option<&Mutex<Surface>>, state: &InputView) {
+    let Some(surface) = surface else {
+        return;
+    };
+    if let Ok(mut s) = surface.lock() {
+        let devices = std::mem::take(&mut s.input.devices);
+        s.input = state.clone();
+        if s.input.devices.is_empty() {
+            s.input.devices = devices;
+        }
+        s.input.error.clear();
+    }
+}
+
+/// Open, close, or retarget capture. Must run on the play thread.
+fn apply_input(
+    playback: &mut backend::Playback,
+    capture: &mut InputView,
+    wanted: &InputView,
+    rate: u32,
+    block: Option<u32>,
+) -> Result<InputView, String> {
+    if !capture.available {
+        return Err(
+            "this patch has no audioin module, so there is nothing for a microphone to reach"
+                .to_string(),
+        );
+    }
+
+    let channel = wanted.channel.max(1);
+    playback
+        .input_channel
+        .store(channel.saturating_sub(1), Ordering::Relaxed);
+
+    if !wanted.enabled {
+        if capture.enabled {
+            playback.input_on.store(false, Ordering::Relaxed);
+            playback.replace_input(None);
+        }
+        capture.enabled = false;
+        if !wanted.device.is_empty() {
+            capture.device = wanted.device.clone();
+        }
+        capture.channel = channel;
+        capture.error.clear();
+        return Ok(capture.clone());
+    }
+
+    let restart = !capture.enabled || capture.device != wanted.device;
+    if restart {
+        let needle = if wanted.device.is_empty() {
+            None
+        } else {
+            Some(wanted.device.as_str())
+        };
+        let device = backend::find_device(Direction::Input, needle)?;
+        let config = backend::negotiate(&device, Direction::Input, Some(rate), block, None)?;
+        let channels = config.channels();
+        if channels == 0 {
+            return Err("the input device opened with no channels".to_string());
+        }
+        let channel = channel.min(channels);
+        playback.input_channel.store(channel - 1, Ordering::Relaxed);
+        let stream = backend::start_input(
+            &device,
+            &config,
+            Arc::clone(&playback.input_channel),
+            Arc::clone(&playback.ring),
+        )?;
+        playback.replace_input(Some(stream));
+        playback.input_on.store(true, Ordering::Relaxed);
+        capture.enabled = true;
+        capture.device = config.device_name;
+        capture.channels = channels;
+        capture.channel = channel;
+        capture.error.clear();
+    } else {
+        if capture.channels > 0 && channel > capture.channels {
+            return Err(format!(
+                "channel {channel} is past this device's {} channel{}",
+                capture.channels,
+                if capture.channels == 1 { "" } else { "s" }
+            ));
+        }
+        capture.channel = channel;
+        playback
+            .input_channel
+            .store(capture.channel - 1, Ordering::Relaxed);
+        capture.error.clear();
+    }
+    Ok(capture.clone())
+}
+
 /// The audio thread, as the page sees it.
 ///
 /// Holds the control channel, not the cpal stream: the stream is `!Send`
 /// on some hosts, and the page's accept loop has to be `Send`.
 struct PlayHost {
     control: std::sync::mpsc::Sender<Control>,
+    input: mpsc::Sender<InputCmd>,
     stats: Arc<backend::Stats>,
+    input_on: Arc<AtomicBool>,
     rate: u32,
     started: Instant,
 }
@@ -764,16 +1013,31 @@ impl Host for PlayHost {
         })
     }
 
+    fn set_input(&self, wanted: &InputView) -> Result<InputView, String> {
+        let (tx, rx) = mpsc::channel();
+        self.input
+            .send(InputCmd::Set(wanted.clone(), tx))
+            .map_err(|_| "the audio thread has stopped".to_string())?;
+        rx.recv_timeout(Duration::from_secs(30))
+            .map_err(|_| "timed out opening the input device".to_string())?
+    }
+
     fn extra_json(&self) -> String {
         let peak = self.stats.peak();
         let late = self.stats.late.load(Ordering::Relaxed);
         let elapsed = self.started.elapsed().as_secs_f32();
+        let input_peak = if self.input_on.load(Ordering::Relaxed) {
+            self.stats.input_peak()
+        } else {
+            0.0
+        };
         format!(
-            "\"elapsed\":{},\"peak\":{},\"late\":{},\"rate\":{}",
+            "\"elapsed\":{},\"peak\":{},\"late\":{},\"rate\":{},\"input_peak\":{}",
             trim_float(elapsed),
             trim_float(peak),
             late,
-            self.rate
+            self.rate,
+            trim_float(input_peak)
         )
     }
 }

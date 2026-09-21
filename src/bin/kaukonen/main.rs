@@ -148,6 +148,7 @@ fn cmd_serve(args: &Args) -> Result<(), String> {
     let url = panel::url(started.addr);
     println!("panel    {url}");
     println!("         no audio; this is the control surface on its own.");
+    println!("         capture stays off here — play a patch to open a microphone.");
     println!("         quit from the page, or Ctrl-C.");
     if !args.flag("no-browser") {
         panel::open_browser(&url);
