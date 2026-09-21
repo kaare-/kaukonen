@@ -1,16 +1,19 @@
 # A large session with two voices: the cells are always playing, and a
 # microphone (or a file) walks in and teaches the connectome.
 #
-# Twelve mismatched RC-1 cells at an audible rate are the room, mixed in
-# three choirs. Four slower cells underneath are the pulse — they fire
-# hits and tug a second oscillator. A four-neuron layer reads slices of
-# both banks into a second memory (cortex). BCM watches a compressed
-# mic. Three filters: the room, the air (a second take on the same
-# cells, opened when someone is there), and the dirt (the two VCOs).
+# Sixteen mismatched RC-1 cells at an audible rate are the room, mixed in
+# four choirs. Four slower cells underneath are the pulse — they fire
+# hits and tug a second oscillator. An eight-cell ring circulates next
+# door: each cell current-drives its neighbour through a hop, speech
+# and a memory lean on those hops, and a four-neuron loop reads the
+# ring. Cortex and BCM still watch the compressed mic. Three filters:
+# the room (cells + ring), the air (the same bed, opened when someone
+# is there), and the dirt (the two VCOs).
 #
 # The microphone never reaches the converter. Its envelope current-drives
-# the banks, opens a second filter on the room, and teaches the memories.
-# What you hear is the rack changing its mind, not the voice itself.
+# the banks and the ring, opens a second filter on the room, and teaches
+# the memories. What you hear is the rack changing its mind, not the
+# voice itself.
 #
 # With no mic you still hear the room. The live page draws the whole
 # patch; click a module to reach its knobs.
@@ -26,6 +29,9 @@
 #
 #   set cells.rate 80          # 40 is a slow pulse, 400 is a pitched tone
 #   set pulse.rate 20          # the rhythm bank
+#   set ring.rate 55           # how fast the circulating bank walks
+#   set hops.a0 0.18           # neighbour coupling around the ring
+#   set hops.a1 0.12           # how hard speech leans on those hops
 #   set cells.bias 2.6         # near 3.2 the audible bank goes chaotic
 #   set room.cutoff 700
 #   set air.cutoff 400         # the speech-opened room filter
@@ -47,9 +53,12 @@ seed 19
 mismatch 0.045
 
 module adc      audioin   gain=1.6 env_rate=16
-module cells    rc1[12]   preset=burst rate=180 noise=0.015 output_gain=2
+module cells    rc1[16]   preset=burst rate=180 noise=0.015 output_gain=2
 module pulse    rc1[4]    preset=burst rate=42 noise=0.02 output_gain=2.2
-module layer    neuron[4] w0=0.5 w1=0.28 w2=0.3 leak=10 gain=3.2 response=0.7
+module ring     rc1[8]    preset=burst rate=88 noise=0.018 output_gain=2
+module hops     mix[8]    a0=0.1 a1=0.08 a2=0.035 a3=0
+module circ     neuron[4] w0=0.55 w1=0.28 w2=0.22 leak=9 gain=3.1 response=0.7
+module layer    neuron[4] w0=0.5 w1=0.28 w2=0.3 w3=0.22 leak=10 gain=3.2 response=0.7
 module hear     neuron    w0=0.45 w1=0.35 leak=14 gain=3 response=0.7
 module feel     neuron    w0=0.4 w1=0.3 bias=0.1 leak=9 gain=3.5 response=0.65
 module see      neuron    w0=0.4 w1=0.35 leak=8 gain=3.2 response=0.7
@@ -58,21 +67,26 @@ module cortex   tc3       rule=oja gamma=0.55 scaling=0.7 target_norm=1.1 activi
 module choir    mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
 module choir2   mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
 module choir3   mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
-module body     mix       a0=0.55 a1=0.55 a2=0.55 a3=0.22 level=0.8
+module choir4   mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
+module ringbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
+module ringbox2 mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
+module orbit    mix       a0=0.55 a1=0.55 level=0.8
+module body     mix       a0=0.55 a1=0.55 a2=0.55 a3=0.5 level=0.8
+module bed      mix       a0=0.7 a1=0.4 level=0.85
 module pulsebox mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
 module tones    mix       a0=0.7 a1=0.45 a2=0 a3=0 level=0.85
 module teach    mix       a0=0.32 a1=0.12 a2=0 a3=0
 module sense    mix       a0=0.22 a1=0 a2=0 a3=0
 module open     mix       a0=2 a1=0 a2=0 a3=0 level=4
-module lift     mix       a0=1.0 a1=0.3 a2=0.45 a3=0 offset=1.0 level=0.7
-module pace     mix       a0=0.35 a1=0.12 a2=0 a3=0
+module lift     mix       a0=1.0 a1=0.3 a2=0.45 a3=0.22 offset=1.0 level=0.7
+module pace     mix       a0=0.35 a1=0.12 a2=0.08 a3=0
 module pace2    mix       a0=0.3 a1=0 a2=0 a3=0
 module fan      mix       a0=0.04 a1=0.12 a2=0 a3=0
 module tug      mix       a0=0.05 a1=0.14 a2=0 a3=0
 module swell    mix       a0=0.45 a1=0.18 a2=0.35 a3=0
 module hitmix   mix       a0=0.7 a1=0.25 a2=0 a3=0
 module left     mix       a0=1.0 a1=0.2 a2=0.22 a3=0 level=0.9
-module right    mix       a0=0.7 a1=0.15 a2=0.4 a3=0 level=0.9
+module right    mix       a0=0.7 a1=0.15 a2=0.4 a3=0.18 level=0.9
 module decay    source    shape=dc volts=0.12
 module hiss     noise     level=1.0
 module drum     env       mode=ad attack=0.003 decay=0.2 threshold=1.55
@@ -87,7 +101,8 @@ module micamp   vca       response=exponential gain=0.0 cv_depth=1.1
 module dirtamp  vca       response=exponential gain=0.12 cv_depth=0.7
 module dac      audioout  rate=48000 level=0.4
 
-# Three choirs of four, then a bed of dirt and pink noise.
+# Four choirs of four. The ring sits beside them in the bed; dirt stays
+# in the stereo mix so it does not colour the room twice.
 patch cells[0].out  -> choir.in0
 patch cells[1].out  -> choir.in1
 patch cells[2].out  -> choir.in2
@@ -100,18 +115,61 @@ patch cells[8].out  -> choir3.in0
 patch cells[9].out  -> choir3.in1
 patch cells[10].out -> choir3.in2
 patch cells[11].out -> choir3.in3
+patch cells[12].out -> choir4.in0
+patch cells[13].out -> choir4.in1
+patch cells[14].out -> choir4.in2
+patch cells[15].out -> choir4.in3
 patch choir.out     -> body.in0
 patch choir2.out    -> body.in1
 patch choir3.out    -> body.in2
-patch dirtamp.out   -> body.in3
+patch choir4.out    -> body.in3
 
 patch pulse[0].out -> pulsebox.in0
 patch pulse[1].out -> pulsebox.in1
 patch pulse[2].out -> pulsebox.in2
 patch pulse[3].out -> pulsebox.in3
 
-# Two oscillators: one FM'd by an audible cell, one PWM'd by the pulse.
+# The ring: each hop hears the previous cell, a little speech, and a
+# trickle from cortex. The last hop wraps, so activity can walk.
+patch ring[0].out -> hops[1].in0
+patch ring[1].out -> hops[2].in0
+patch ring[2].out -> hops[3].in0
+patch ring[3].out -> hops[4].in0
+patch ring[4].out -> hops[5].in0
+patch ring[5].out -> hops[6].in0
+patch ring[6].out -> hops[7].in0
+patch ring[7].out -> hops[0].in0
+patch adc.env     -> hops[*].in1
+patch cortex.b    -> hops[*].in2
+patch hops[i].out -> ring[i].in
+patch ring[0].out -> ringbox.in0
+patch ring[1].out -> ringbox.in1
+patch ring[2].out -> ringbox.in2
+patch ring[3].out -> ringbox.in3
+patch ring[4].out -> ringbox2.in0
+patch ring[5].out -> ringbox2.in1
+patch ring[6].out -> ringbox2.in2
+patch ring[7].out -> ringbox2.in3
+patch ringbox.out  -> orbit.in0
+patch ringbox2.out -> orbit.in1
+patch body.out     -> bed.in0
+patch orbit.out    -> bed.in1
+
+# A four-neuron loop reads every other ring cell and the mic envelope.
+patch circ[0].out -> circ[1].in0
+patch circ[1].out -> circ[2].in0
+patch circ[2].out -> circ[3].in0
+patch circ[3].out -> circ[0].in0
+patch ring[0].out -> circ[0].in1
+patch ring[2].out -> circ[1].in1
+patch ring[4].out -> circ[2].in1
+patch ring[6].out -> circ[3].in1
+patch adc.env     -> circ[*].in2
+
+# Two oscillators: one FM'd by an audible cell and the circulator, one
+# PWM'd by the pulse.
 patch cells[2].out -> pace.in0
+patch circ[1].out  -> pace.in2
 patch pace.out     -> osc.fm
 patch pulse[1].out -> pace2.in0
 patch pace2.out    -> thin.pwm
@@ -119,14 +177,20 @@ patch osc.saw      -> tones.in0
 patch thin.pulse   -> tones.in1
 patch tones.out    -> dirt.in
 patch hiss.pink    -> dirt.res_cv
+patch circ[3].out  -> dirt.res_cv
 
-# The neuron layer reads four slices of the two banks.
+# The neuron layer reads slices of the cells, the pulse, the envelope,
+# and the ring.
 patch cells[0].out  -> layer[0].in0
 patch cells[4].out  -> layer[1].in0
 patch cells[8].out  -> layer[2].in0
 patch pulse[0].out  -> layer[3].in0
 patch pulse[i].out  -> layer[i].in1
 patch adc.env       -> layer[*].in2
+patch ring[0].out   -> layer[0].in3
+patch ring[2].out   -> layer[1].in3
+patch ring[4].out   -> layer[2].in3
+patch ring[6].out   -> layer[3].in3
 
 # Hits: one cell plucks the room, one pulse plucks the dirt.
 patch cells[0].out -> drum.gate
@@ -168,12 +232,13 @@ patch cortex.a -> tug.in0
 patch adc.env  -> tug.in1
 patch tug.out  -> pulse[*].in
 
-# Timbre. ACTIVITY, hits, and the mic envelope open the VCAs and sweep
-# cutoffs. air is a second filter on the same room, closed until someone
-# is there; it never sees the microphone's waveform.
+# Timbre. ACTIVITY, hits, the mic envelope, and the circulating loop
+# open the VCAs and sweep cutoffs. air is a second filter on the same
+# bed, closed until someone is there; it never sees the microphone.
 patch brain.a          -> lift.in0
 patch cells[3].out     -> lift.in1
 patch adc.env          -> lift.in2
+patch circ[0].out      -> lift.in3
 patch lift.out         -> room.cutoff_cv
 patch cortex.a         -> dirt.cutoff_cv
 patch brain.activity   -> room.res_cv
@@ -189,20 +254,22 @@ patch adc.env          -> open.in0
 patch open.out         -> air.cutoff_cv
 patch open.out         -> micamp.cv
 
-patch body.out    -> room.in
+patch bed.out     -> room.in
 patch room.out    -> roomamp.in
-patch body.out    -> air.in
+patch bed.out     -> air.in
 patch air.out     -> micamp.in
 patch dirt.out    -> dirtamp.in
 
-# Two takes on the room and a little dirt. Nothing from the adc.
+# Two takes on the room, a little dirt, and a dry edge of the orbit
+# on the right. Nothing from the adc.
 patch roomamp.out -> left.in0
 patch micamp.out  -> left.in1
 patch dirtamp.out -> left.in2
 patch roomamp.out -> right.in0
 patch micamp.out  -> right.in1
 patch dirtamp.out -> right.in2
+patch orbit.out   -> right.in3
 patch left.out    -> dac.left
 patch right.out   -> dac.right
 
-record adc.out adc.env cells[0].v pulse[0].v layer[0].v brain.norm cortex.norm brain.activity room.cutoff air.cutoff dirt.cutoff roomamp.gain micamp.gain
+record adc.out adc.env cells[0].v pulse[0].v ring[0].v circ[0].v layer[0].v brain.norm cortex.norm brain.activity room.cutoff air.cutoff dirt.cutoff roomamp.gain micamp.gain

@@ -20,7 +20,7 @@ use std::path::Path;
 const MAX_POINTS: usize = 16_000;
 
 /// A rack this size is worth drawing. Beyond it the diagram is unreadable.
-const MAX_DIAGRAM_MODULES: usize = 60;
+const MAX_DIAGRAM_MODULES: usize = 96;
 
 /// Everything the page can show.
 pub struct Scope<'a> {
@@ -784,7 +784,7 @@ mod tests {
     #[test]
     fn a_huge_rack_skips_the_diagram_instead_of_drawing_mush() {
         let (recorder, network, schedule) =
-            recorded("rate 200\nseconds 0.1\nmodule cells rc1[80]\nrecord cells[0].v\n");
+            recorded("rate 200\nseconds 0.1\nmodule cells rc1[120]\nrecord cells[0].v\n");
         let page = Scope::new("big", &recorder)
             .with_patch(&network, &schedule)
             .render();

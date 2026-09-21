@@ -1310,10 +1310,19 @@ mod tests {
         let built = patch::parse(&text).unwrap().build().unwrap();
         let s = Surface::from_built("patches/duet.kpatch", "test", 0.3, &built);
         assert!(s.input.available);
-        assert!(s.map.nodes.len() >= 40, "nodes={}", s.map.nodes.len());
-        assert!(s.map.cables.len() >= 40, "cables={}", s.map.cables.len());
+        assert!(s.map.nodes.len() >= 70, "nodes={}", s.map.nodes.len());
+        assert!(s.map.cables.len() >= 80, "cables={}", s.map.cables.len());
         assert!(s.map.nodes.iter().any(|n| n.kind == "audioin"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "ring"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "hops"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "circ"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
+        let ring_wrap = s.map.cables.iter().any(|c| {
+            c.feedback
+                && s.map.nodes.get(c.from).is_some_and(|n| n.bank == "ring")
+                && s.map.nodes.get(c.to).is_some_and(|n| n.bank == "hops")
+        });
+        assert!(ring_wrap, "the ring should close with a feedback hop");
     }
 
     #[test]
