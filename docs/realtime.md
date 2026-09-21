@@ -119,11 +119,20 @@ mono, and handed to every `audioin` in the patch.
 
 ## Turning knobs while it plays
 
-`play` is a console. Every knob in the rack is reachable by the name the patch
-gave it, and changes take effect at the next buffer.
+`play` opens `http://127.0.0.1:7420` and the same console as before. The page
+is the knobs — sliders honour each taper, a bank card sets every instance,
+gain / mute / quit sit at the top, and the peak meter is the same number
+the status line prints. Sound still leaves through the interface; the
+browser never sees audio.
+
+`--port` picks the port, `--no-browser` skips opening one, `--no-web` is
+the console only. `kaukonen serve --patch patches/live.kpatch` is the same
+page without a device, so the layout can be checked on a machine with no
+sound card.
 
 ```
 playing. Type `help` for the controls, `quit` to stop.
+panel    http://127.0.0.1:7420
 > modules
   cells[0]         rc1
   cells[1]         rc1

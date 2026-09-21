@@ -139,7 +139,8 @@ rendered audio embedded so you can play it.
 | `bench` | Wall time as a factor of real time, and worst-case streaming headroom. |
 | `probe` | Nudge a knob and report whether the two runs diverge. |
 | `devices` | What audio hardware is available, and what it can do. |
-| `play` | Play through an interface, with every knob adjustable live. |
+| `play` | Play through an interface. Knobs live in the browser and at the console. |
+| `serve` | The same control page, without audio. |
 
 ## Patches
 
@@ -182,14 +183,19 @@ cargo build --release --features realtime
     --device scarlett --block 256 --gain 0.3
 ```
 
-`play` is a console: every knob in the rack is reachable by the name the patch
-gave it while the sound is running.
+`play` opens a control page on loopback and the same console as before.
+Every knob is a slider; a bank name still sets every instance.
 
 ```
 > set filt.cutoff 4000
 > set cells.rate 400          # a bank name sets every instance
 > gain 0.3
 > quit
+```
+
+```bash
+# the page without audio, to check the layout
+kaukonen serve --patch patches/live.kpatch
 ```
 
 The device owns the clock, so the rack is rebuilt at the device's rate rather

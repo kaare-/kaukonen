@@ -5,6 +5,7 @@
 
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -16,6 +17,8 @@ use kaukonen::param::{self, trim_float};
 use kaukonen::patch;
 use kaukonen::wav::{Audio, SampleFormat};
 use kaukonen::Stream;
+
+use crate::panel::{self, Host, Surface};
 
 /// How often the console prints a line of stream health while playing.
 const REPORT_INTERVAL: Duration = Duration::from_secs(2);
@@ -40,6 +43,9 @@ pub const PLAY_OPTIONS: &[&str] = &[
     "record",
     "seconds",
     "quiet",
+    "port",
+    "no-web",
+    "no-browser",
 ];
 
 /// `kaukonen devices`
@@ -111,6 +117,9 @@ pub struct PlayArgs<'a> {
     pub record: Option<&'a str>,
     pub seconds: Option<f32>,
     pub quiet: bool,
+    pub port: u16,
+    pub web: bool,
+    pub open_browser: bool,
 }
 
 pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
@@ -208,6 +217,9 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     // A directory of every knob, so the console can resolve names without
     // touching the rack once the audio thread owns it.
     let directory = Directory::of(&built);
+    let surface = args
+        .web
+        .then(|| Surface::from_built(args.source, &output.device_name, args.gain, &built));
     let rack = Stream::new(built);
     if !rack.has_output() {
         return Err(format!(
@@ -273,8 +285,37 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
         then_stop: false,
     });
 
-    println!("playing. Type `help` for the controls, `quit` to stop.");
     let started = Instant::now();
+    let panel = match surface {
+        Some(surface) => {
+            let host = Arc::new(PlayHost {
+                control: playback.control(),
+                stats: Arc::clone(&playback.stats),
+                rate: playback.negotiated.sample_rate(),
+                started,
+            });
+            match panel::start(surface, host, args.port) {
+                Ok(panel) => {
+                    let url = panel::url(panel.addr);
+                    println!("panel    {url}");
+                    if args.open_browser {
+                        panel::open_browser(&url);
+                    }
+                    Some(panel)
+                }
+                Err(e) => {
+                    println!("note     {e}");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+
+    println!("playing. Type `help` for the controls, `quit` to stop.");
+    if panel.is_some() {
+        println!("         knobs are also on the page.");
+    }
 
     // Draining has to be independent of the console, or an interactive session
     // that sits waiting at the prompt would let the staging buffer fill and
@@ -306,8 +347,19 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     });
 
     let mut last_report = Instant::now();
-    let stdin = std::io::stdin();
-    let mut lines = stdin.lock().lines();
+    // Console lines arrive on their own thread so a browser `quit` can stop
+    // us without waiting for someone to press return at the prompt.
+    let (line_tx, line_rx) = mpsc::channel::<Result<String, String>>();
+    if args.seconds.is_none() {
+        std::thread::spawn(move || {
+            let stdin = std::io::stdin();
+            for line in stdin.lock().lines() {
+                if line_tx.send(line.map_err(|e| e.to_string())).is_err() {
+                    break;
+                }
+            }
+        });
+    }
 
     loop {
         if let Some(limit) = args.seconds {
@@ -315,24 +367,33 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                 break;
             }
         }
+        if panel
+            .as_ref()
+            .is_some_and(|p| p.stop.load(Ordering::Relaxed))
+        {
+            break;
+        }
         if !args.quiet && last_report.elapsed() >= REPORT_INTERVAL {
             last_report = Instant::now();
             report(&playback, started);
         }
 
-        // Only block on the console when there is no deadline to keep.
-        if args.seconds.is_none() {
-            match lines.next() {
-                None => break,
-                Some(Err(e)) => return Err(format!("cannot read from the console: {e}")),
-                Some(Ok(line)) => {
-                    if !handle(&line, &playback, &directory, started)? {
-                        break;
-                    }
+        match line_rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(Err(e)) => return Err(format!("cannot read from the console: {e}")),
+            Ok(Ok(line)) => {
+                let surface = panel.as_ref().map(|p| p.surface.as_ref());
+                if !handle(&line, &playback, &directory, started, surface)? {
+                    break;
                 }
             }
-        } else {
-            std::thread::sleep(Duration::from_millis(20));
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // stdin closed. Keep going if the page is still up.
+                if panel.is_none() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
         }
         if playback.finished.load(Ordering::Relaxed) {
             break;
@@ -340,6 +401,9 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     }
 
     println!("stopping.");
+    if let Some(panel) = &panel {
+        panel.stop.store(true, Ordering::Relaxed);
+    }
     playback.fade_out();
     drain_stop.store(true, Ordering::Relaxed);
     if let Some(handle) = drain {
@@ -518,6 +582,7 @@ fn handle(
     playback: &backend::Playback,
     directory: &Directory,
     started: Instant,
+    surface: Option<&Mutex<Surface>>,
 ) -> Result<bool, String> {
     let mut words = line.split_whitespace();
     let Some(command) = words.next() else {
@@ -526,7 +591,14 @@ fn handle(
     let rest: Vec<&str> = words.collect();
 
     match command {
-        "quit" | "q" | "exit" | "stop" => return Ok(false),
+        "quit" | "q" | "exit" | "stop" => {
+            if let Some(surface) = surface {
+                if let Ok(mut s) = surface.lock() {
+                    s.quit = true;
+                }
+            }
+            return Ok(false);
+        }
         "help" | "?" => {
             println!("  set <module>.<knob> <value>   turn a knob while it plays");
             println!("  knobs <module>                list a module's knobs and ranges");
@@ -535,6 +607,7 @@ fn handle(
             println!("  mute / unmute                 fade out and back in");
             println!("  stats                         print stream health now");
             println!("  quit                          fade out and stop");
+            println!("  the same knobs are on the browser page if a panel is running");
         }
         "modules" => {
             for entry in &directory.entries {
@@ -576,6 +649,15 @@ fn handle(
                     value,
                 })?;
             }
+            if let Some(surface) = surface {
+                if let Ok(mut s) = surface.lock() {
+                    let _ = s.set_knob(
+                        rest[0].rsplit_once('.').map(|(m, _)| m).unwrap_or(rest[0]),
+                        spec.name,
+                        rest[1],
+                    );
+                }
+            }
             println!(
                 "  {} = {}{}",
                 rest[0],
@@ -594,6 +676,11 @@ fn handle(
                 .parse()
                 .map_err(|_| "gain wants a number".to_string())?;
             playback.send(Control::Gain(value.clamp(0.0, 8.0)))?;
+            if let Some(surface) = surface {
+                if let Ok(mut s) = surface.lock() {
+                    s.gain = value.clamp(0.0, 8.0);
+                }
+            }
             println!("  gain = {}", trim_float(value));
         }
         "mute" => {
@@ -601,6 +688,11 @@ fn handle(
                 to: 0.0,
                 then_stop: false,
             })?;
+            if let Some(surface) = surface {
+                if let Ok(mut s) = surface.lock() {
+                    s.muted = true;
+                }
+            }
             println!("  muted");
         }
         "unmute" => {
@@ -608,6 +700,11 @@ fn handle(
                 to: 1.0,
                 then_stop: false,
             })?;
+            if let Some(surface) = surface {
+                if let Ok(mut s) = surface.lock() {
+                    s.muted = false;
+                }
+            }
             println!("  unmuted");
         }
         "stats" => report(playback, started),
@@ -622,5 +719,61 @@ fn or_none(text: &str) -> String {
         "?".to_string()
     } else {
         text.to_string()
+    }
+}
+
+/// The audio thread, as the page sees it.
+///
+/// Holds the control channel, not the cpal stream: the stream is `!Send`
+/// on some hosts, and the page's accept loop has to be `Send`.
+struct PlayHost {
+    control: std::sync::mpsc::Sender<Control>,
+    stats: Arc<backend::Stats>,
+    rate: u32,
+    started: Instant,
+}
+
+impl PlayHost {
+    fn send(&self, control: Control) -> Result<(), String> {
+        self.control
+            .send(control)
+            .map_err(|_| "the audio thread has stopped".to_string())
+    }
+}
+
+impl Host for PlayHost {
+    fn set_knob(&self, modules: &[usize], knob: &'static str, value: f32) -> Result<(), String> {
+        for module in modules {
+            self.send(Control::Knob {
+                module: *module,
+                knob,
+                value,
+            })?;
+        }
+        Ok(())
+    }
+
+    fn set_gain(&self, value: f32) -> Result<(), String> {
+        self.send(Control::Gain(value))
+    }
+
+    fn set_mute(&self, muted: bool) -> Result<(), String> {
+        self.send(Control::Fade {
+            to: if muted { 0.0 } else { 1.0 },
+            then_stop: false,
+        })
+    }
+
+    fn extra_json(&self) -> String {
+        let peak = self.stats.peak();
+        let late = self.stats.late.load(Ordering::Relaxed);
+        let elapsed = self.started.elapsed().as_secs_f32();
+        format!(
+            "\"elapsed\":{},\"peak\":{},\"late\":{},\"rate\":{}",
+            trim_float(elapsed),
+            trim_float(peak),
+            late,
+            self.rate
+        )
     }
 }

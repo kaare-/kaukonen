@@ -423,6 +423,11 @@ impl Stats {
         self.peak_bits.store(current.to_bits(), Ordering::Relaxed);
     }
 
+    /// Current peak, without resetting it. The control page polls this.
+    pub fn peak(&self) -> f32 {
+        f32::from_bits(self.peak_bits.load(Ordering::Relaxed))
+    }
+
     /// Read and reset the peak, so each report covers one interval.
     pub fn take_peak(&self) -> f32 {
         f32::from_bits(self.peak_bits.swap(0.0f32.to_bits(), Ordering::Relaxed))
@@ -536,6 +541,12 @@ impl Playback {
         self.control
             .send(control)
             .map_err(|_| "the audio thread has stopped".to_string())
+    }
+
+    /// A clone of the control channel, so a host that is `Send` can talk to
+    /// the audio thread without holding the cpal stream.
+    pub fn control(&self) -> Sender<Control> {
+        self.control.clone()
     }
 
     /// Fade out and let the tail through, so stopping does not click.

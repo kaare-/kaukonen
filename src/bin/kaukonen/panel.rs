@@ -1,0 +1,964 @@
+//! The live control surface, served as a local web page.
+//!
+//! Audio still leaves through the interface. This is the knobs: the same
+//! names the console's `set` takes, grouped the same way, reachable from a
+//! browser on the same machine. Nothing is bound off loopback.
+
+use kaukonen::module::AnalogModule;
+use kaukonen::network::ModuleId;
+use kaukonen::param::{self, trim_float, ParamSpec};
+use kaukonen::BuiltPatch;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Instant;
+
+/// What the page shows, and what a POST turns.
+pub struct Surface {
+    pub patch: String,
+    pub device: String,
+    pub gain: f32,
+    pub muted: bool,
+    pub quit: bool,
+    pub modules: Vec<Bank>,
+}
+
+/// One declared module, or a whole bank under a single set of sliders.
+pub struct Bank {
+    pub name: String,
+    pub kind: String,
+    pub count: usize,
+    pub indices: Vec<usize>,
+    pub knobs: Vec<KnobView>,
+}
+
+pub struct KnobView {
+    pub spec: ParamSpec,
+    pub value: f32,
+}
+
+impl Surface {
+    /// Snapshot every knob before the rack moves to the audio thread.
+    ///
+    /// A bank is one card. Turning a slider sets every instance, which is
+    /// what `set cells.rate` does at the console. Mismatch may have made
+    /// the instances differ; the value shown is the first one's.
+    pub fn from_built(patch: &str, device: &str, gain: f32, built: &BuiltPatch) -> Self {
+        let mut modules: Vec<Bank> = Vec::new();
+        for index in 0..built.network.len() {
+            let label = built.network.label(ModuleId(index));
+            let bank = label.split('[').next().unwrap_or(label);
+            let module = built.network.get(ModuleId(index));
+            if let Some(existing) = modules.iter_mut().find(|m| m.name == bank) {
+                existing.indices.push(index);
+                existing.count += 1;
+                continue;
+            }
+            let knobs = module
+                .params()
+                .iter()
+                .copied()
+                .map(|spec| KnobView {
+                    value: module.get_param(spec.name).unwrap_or(spec.default),
+                    spec,
+                })
+                .collect();
+            modules.push(Bank {
+                name: bank.to_string(),
+                kind: module.kind_name().to_string(),
+                count: 1,
+                indices: vec![index],
+                knobs,
+            });
+        }
+        Self {
+            patch: patch.to_string(),
+            device: device.to_string(),
+            gain,
+            muted: false,
+            quit: false,
+            modules,
+        }
+    }
+
+    pub fn find_bank(&self, name: &str) -> Option<&Bank> {
+        self.modules.iter().find(|m| m.name == name)
+    }
+
+    pub fn find_bank_mut(&mut self, name: &str) -> Option<&mut Bank> {
+        self.modules.iter_mut().find(|m| m.name == name)
+    }
+
+    /// Apply a knob turn. Returns the instances, the `'static` knob name,
+    /// the checked value, and a formatted readout.
+    pub fn set_knob(
+        &mut self,
+        module: &str,
+        knob: &str,
+        raw: &str,
+    ) -> Result<(Vec<usize>, &'static str, f32, String), String> {
+        let bank = self
+            .find_bank_mut(module)
+            .ok_or_else(|| format!("no module called '{module}'"))?;
+        let slot = bank
+            .knobs
+            .iter_mut()
+            .find(|k| k.spec.name == knob)
+            .ok_or_else(|| format!("a {} has no knob '{knob}'", bank.kind))?;
+        let value = slot
+            .spec
+            .parse(raw)
+            .map_err(|e| e.to_string())
+            .and_then(|v| param::checked(&slot.spec, v).map_err(|e| e.to_string()))?;
+        slot.value = value;
+        let formatted = slot.spec.format(value);
+        Ok((bank.indices.clone(), slot.spec.name, value, formatted))
+    }
+
+    pub fn to_json(&self, extra: &str) -> String {
+        let mut out = String::new();
+        out.push('{');
+        push_str(&mut out, "patch", &self.patch);
+        out.push(',');
+        push_str(&mut out, "device", &self.device);
+        out.push(',');
+        let _ = std::fmt::Write::write_fmt(
+            &mut out,
+            format_args!(
+                "\"gain\":{},\"muted\":{},\"quit\":{}",
+                json_num(self.gain),
+                self.muted,
+                self.quit
+            ),
+        );
+        if !extra.is_empty() {
+            out.push(',');
+            out.push_str(extra);
+        }
+        out.push_str(",\"modules\":[");
+        for (i, bank) in self.modules.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push('{');
+            push_str(&mut out, "name", &bank.name);
+            out.push(',');
+            push_str(&mut out, "kind", &bank.kind);
+            let _ = std::fmt::Write::write_fmt(
+                &mut out,
+                format_args!(",\"count\":{},\"knobs\":[", bank.count),
+            );
+            for (j, knob) in bank.knobs.iter().enumerate() {
+                if j > 0 {
+                    out.push(',');
+                }
+                out.push('{');
+                push_str(&mut out, "name", knob.spec.name);
+                out.push(',');
+                push_str(&mut out, "doc", knob.spec.doc);
+                out.push(',');
+                push_str(
+                    &mut out,
+                    "taper",
+                    match knob.spec.taper {
+                        kaukonen::param::Taper::Log => "log",
+                        kaukonen::param::Taper::Linear => "linear",
+                    },
+                );
+                out.push(',');
+                push_str(&mut out, "unit", knob.spec.unit.suffix().trim());
+                out.push(',');
+                let _ = std::fmt::Write::write_fmt(
+                    &mut out,
+                    format_args!(
+                        "\"min\":{},\"max\":{},\"default\":{},\"value\":{}",
+                        json_num(knob.spec.min),
+                        json_num(knob.spec.max),
+                        json_num(knob.spec.default),
+                        json_num(knob.value)
+                    ),
+                );
+                if let Some(choices) = knob.spec.choices() {
+                    out.push_str(",\"choices\":[");
+                    for (c, name) in choices.iter().enumerate() {
+                        if c > 0 {
+                            out.push(',');
+                        }
+                        out.push('"');
+                        out.push_str(&escape_json(name));
+                        out.push('"');
+                    }
+                    out.push(']');
+                }
+                out.push('}');
+            }
+            out.push_str("]}");
+        }
+        out.push_str("]}");
+        out
+    }
+}
+
+/// A running panel. Dropping it does not stop the accept thread; `stop` does.
+pub struct Panel {
+    pub addr: SocketAddr,
+    /// Read by `play` (realtime) and by the panel tests. Quiet otherwise.
+    #[allow(dead_code)]
+    pub surface: Arc<Mutex<Surface>>,
+    pub stop: Arc<AtomicBool>,
+}
+
+/// How a host applies a change that came from the page.
+pub trait Host: Send + Sync + 'static {
+    fn set_knob(&self, modules: &[usize], knob: &'static str, value: f32) -> Result<(), String>;
+    fn set_gain(&self, value: f32) -> Result<(), String>;
+    fn set_mute(&self, muted: bool) -> Result<(), String>;
+    fn extra_json(&self) -> String {
+        String::new()
+    }
+}
+
+/// A host that only updates the surface. Used by `serve` (no audio).
+pub struct Silent;
+
+impl Host for Silent {
+    fn set_knob(&self, _modules: &[usize], _knob: &'static str, _value: f32) -> Result<(), String> {
+        Ok(())
+    }
+    fn set_gain(&self, _value: f32) -> Result<(), String> {
+        Ok(())
+    }
+    fn set_mute(&self, _muted: bool) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// Bind loopback and serve the page on a background thread.
+pub fn start(surface: Surface, host: Arc<dyn Host>, port: u16) -> Result<Panel, String> {
+    let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| {
+        if port == 0 {
+            format!("cannot bind a local port: {e}")
+        } else {
+            format!(
+                "cannot bind 127.0.0.1:{port}: {e}. Pass --port 0 to pick one, \
+                 or --no-web to skip the page."
+            )
+        }
+    })?;
+    listener
+        .set_nonblocking(false)
+        .map_err(|e| format!("cannot listen: {e}"))?;
+    let addr = listener
+        .local_addr()
+        .map_err(|e| format!("cannot read bound address: {e}"))?;
+    let surface = Arc::new(Mutex::new(surface));
+    let stop = Arc::new(AtomicBool::new(false));
+    {
+        let surface = Arc::clone(&surface);
+        let stop = Arc::clone(&stop);
+        thread::spawn(move || accept_loop(listener, surface, host, stop));
+    }
+    Ok(Panel {
+        addr,
+        surface,
+        stop,
+    })
+}
+
+pub fn url(addr: SocketAddr) -> String {
+    format!("http://127.0.0.1:{}", addr.port())
+}
+
+pub fn open_browser(url: &str) {
+    let result = if cfg!(target_os = "macos") {
+        std::process::Command::new("open").arg(url).spawn()
+    } else if cfg!(target_os = "windows") {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+    } else {
+        std::process::Command::new("xdg-open").arg(url).spawn()
+    };
+    if let Err(e) = result {
+        eprintln!("note     could not open a browser ({e}). Open {url} yourself.");
+    }
+}
+
+fn accept_loop(
+    listener: TcpListener,
+    surface: Arc<Mutex<Surface>>,
+    host: Arc<dyn Host>,
+    stop: Arc<AtomicBool>,
+) {
+    listener.set_nonblocking(true).expect("nonblocking listen");
+    while !stop.load(Ordering::Relaxed) {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                let surface = Arc::clone(&surface);
+                let host = Arc::clone(&host);
+                let stop = Arc::clone(&stop);
+                thread::spawn(move || {
+                    let _ = handle_client(stream, &surface, host.as_ref(), &stop);
+                });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(_) => break,
+        }
+    }
+}
+
+fn handle_client(
+    mut stream: TcpStream,
+    surface: &Mutex<Surface>,
+    host: &dyn Host,
+    stop: &AtomicBool,
+) -> std::io::Result<()> {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+    let mut buf = vec![0u8; 16_384];
+    let n = stream.read(&mut buf)?;
+    if n == 0 {
+        return Ok(());
+    }
+    let req = String::from_utf8_lossy(&buf[..n]);
+    let (method, path, body) = match parse_request(&req) {
+        Some(parts) => parts,
+        None => {
+            write_response(&mut stream, 400, "text/plain", b"bad request")?;
+            return Ok(());
+        }
+    };
+
+    match (method, path) {
+        ("GET", "/") | ("GET", "/index.html") => {
+            write_response(
+                &mut stream,
+                200,
+                "text/html; charset=utf-8",
+                PAGE.as_bytes(),
+            )?;
+        }
+        ("GET", "/api/state") => {
+            let extra = host.extra_json();
+            let json = surface
+                .lock()
+                .map(|s| s.to_json(&extra))
+                .unwrap_or_else(|_| "{\"error\":\"locked\"}".to_string());
+            write_response(&mut stream, 200, "application/json", json.as_bytes())?;
+        }
+        ("POST", "/api/set") => {
+            let module = json_string(body, "module").unwrap_or_default();
+            let knob = json_string(body, "knob").unwrap_or_default();
+            let raw = json_raw(body, "value").unwrap_or_default();
+            let applied = match surface.lock() {
+                Ok(mut s) => s.set_knob(&module, &knob, &raw).map(|t| {
+                    let count = s.find_bank(&module).map(|m| m.count).unwrap_or(1);
+                    (t, count)
+                }),
+                Err(_) => Err("the panel is locked".to_string()),
+            };
+            match applied {
+                Ok(((indices, name, value, formatted), count)) => {
+                    if let Err(e) = host.set_knob(&indices, name, value) {
+                        write_response(
+                            &mut stream,
+                            500,
+                            "application/json",
+                            error_json(&e).as_bytes(),
+                        )?;
+                    } else {
+                        let msg = if count > 1 {
+                            format!("{module}.{knob} = {formatted} ({count} instances)")
+                        } else {
+                            format!("{module}.{knob} = {formatted}")
+                        };
+                        println!("  {msg}");
+                        write_response(
+                            &mut stream,
+                            200,
+                            "application/json",
+                            format!(
+                                "{{\"ok\":true,\"readout\":\"{}\"}}",
+                                escape_json(&formatted)
+                            )
+                            .as_bytes(),
+                        )?;
+                    }
+                }
+                Err(err) => {
+                    write_response(
+                        &mut stream,
+                        400,
+                        "application/json",
+                        error_json(&err).as_bytes(),
+                    )?;
+                }
+            }
+        }
+        ("POST", "/api/gain") => {
+            let value = json_f32(body, "value").unwrap_or(0.3).clamp(0.0, 8.0);
+            if let Ok(mut s) = surface.lock() {
+                s.gain = value;
+            }
+            if let Err(e) = host.set_gain(value) {
+                write_response(
+                    &mut stream,
+                    500,
+                    "application/json",
+                    error_json(&e).as_bytes(),
+                )?;
+            } else {
+                println!("  gain = {}", trim_float(value));
+                write_response(&mut stream, 200, "application/json", b"{\"ok\":true}")?;
+            }
+        }
+        ("POST", "/api/mute") => {
+            let muted = json_bool(body, "muted").unwrap_or(true);
+            if let Ok(mut s) = surface.lock() {
+                s.muted = muted;
+            }
+            if let Err(e) = host.set_mute(muted) {
+                write_response(
+                    &mut stream,
+                    500,
+                    "application/json",
+                    error_json(&e).as_bytes(),
+                )?;
+            } else {
+                println!("{}", if muted { "  muted" } else { "  unmuted" });
+                write_response(&mut stream, 200, "application/json", b"{\"ok\":true}")?;
+            }
+        }
+        ("POST", "/api/quit") => {
+            if let Ok(mut s) = surface.lock() {
+                s.quit = true;
+            }
+            stop.store(true, Ordering::Relaxed);
+            write_response(&mut stream, 200, "application/json", b"{\"ok\":true}")?;
+        }
+        _ => {
+            write_response(&mut stream, 404, "text/plain", b"not found")?;
+        }
+    }
+    Ok(())
+}
+
+fn write_response(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &[u8],
+) -> std::io::Result<()> {
+    let reason = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        _ => "Error",
+    };
+    let header = format!(
+        "HTTP/1.1 {status} {reason}\r\n\
+         Content-Type: {content_type}\r\n\
+         Content-Length: {}\r\n\
+         Cache-Control: no-store\r\n\
+         Connection: close\r\n\
+         Access-Control-Allow-Origin: *\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(header.as_bytes())?;
+    stream.write_all(body)?;
+    Ok(())
+}
+
+fn parse_request(req: &str) -> Option<(&str, &str, &str)> {
+    let (head, body) = req
+        .split_once("\r\n\r\n")
+        .or_else(|| req.split_once("\n\n"))?;
+    let mut lines = head.split('\n');
+    let start = lines.next()?.trim_end_matches('\r');
+    let mut parts = start.split_whitespace();
+    let method = parts.next()?;
+    let path = parts.next()?.split('?').next()?;
+    Some((method, path, body))
+}
+
+fn json_string(body: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\"");
+    let rest = body.split_once(&needle)?.1;
+    let rest = rest.trim_start().strip_prefix(':')?.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let mut out = String::new();
+    let mut chars = rest.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(n) = chars.next() {
+                out.push(n);
+            }
+        } else if c == '"' {
+            break;
+        } else {
+            out.push(c);
+        }
+    }
+    Some(out)
+}
+
+/// A JSON value as the page sent it: a quoted string or a bare number.
+fn json_raw(body: &str, key: &str) -> Option<String> {
+    if let Some(s) = json_string(body, key) {
+        return Some(s);
+    }
+    json_f32(body, key).map(trim_float)
+}
+
+fn json_f32(body: &str, key: &str) -> Option<f32> {
+    let needle = format!("\"{key}\"");
+    let rest = body.split_once(&needle)?.1;
+    let rest = rest.trim_start().strip_prefix(':')?.trim_start();
+    let token = rest.split([',', '}', ']', ' ', '\n', '\r', '\t']).next()?;
+    token.parse().ok()
+}
+
+fn json_bool(body: &str, key: &str) -> Option<bool> {
+    let needle = format!("\"{key}\"");
+    let rest = body.split_once(&needle)?.1;
+    let rest = rest.trim_start().strip_prefix(':')?.trim_start();
+    if rest.starts_with("true") {
+        Some(true)
+    } else if rest.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn error_json(message: &str) -> String {
+    format!("{{\"ok\":false,\"error\":\"{}\"}}", escape_json(message))
+}
+
+fn push_str(out: &mut String, key: &str, value: &str) {
+    out.push('"');
+    out.push_str(key);
+    out.push_str("\":\"");
+    out.push_str(&escape_json(value));
+    out.push('"');
+}
+
+fn escape_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn json_num(v: f32) -> String {
+    if !v.is_finite() {
+        return "0".to_string();
+    }
+    trim_float(v)
+}
+
+/// Block until the page asks to quit, the process is interrupted, or `until`.
+pub fn wait_until_quit(stop: &AtomicBool, until: Option<Instant>) {
+    while !stop.load(Ordering::Relaxed) {
+        if until.is_some_and(|t| Instant::now() >= t) {
+            break;
+        }
+        thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+const PAGE: &str = r##"<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kaukonen</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: ui-sans-serif, system-ui, sans-serif; background: #0d0f12;
+       color: #e5e7eb; margin: 0; padding: 20px 24px 48px; }
+h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
+h2 { font-size: 12px; font-weight: 600; text-transform: uppercase;
+     letter-spacing: .08em; color: #9ca3af; margin: 0 0 10px; }
+.sub { color: #9ca3af; font-size: 13px; margin: 0 0 16px; }
+header { display: flex; justify-content: space-between; gap: 24px;
+         align-items: flex-start; flex-wrap: wrap; margin-bottom: 18px; }
+.meter { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.peak { width: 160px; height: 10px; background: #1b2028; border: 1px solid #2d333b;
+        border-radius: 99px; overflow: hidden; }
+.peak > i { display: block; height: 100%; width: 0; background: #34d399; }
+.peak.hot > i { background: #f59e0b; }
+.peak.clip > i { background: #f87171; }
+.stat { font-variant-numeric: tabular-nums; font-size: 12px; color: #9ca3af; }
+.stat b { color: #e5e7eb; font-weight: 600; }
+.transport { display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+             background: #12151a; border: 1px solid #23282f; border-radius: 8px;
+             padding: 12px 14px; margin-bottom: 20px; }
+.transport label { font-size: 12px; color: #9ca3af; }
+.transport .val { font-variant-numeric: tabular-nums; min-width: 3.5em; }
+button { background: #1b1f26; color: #e5e7eb; border: 1px solid #2d333b;
+         border-radius: 5px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+button:hover { border-color: #4b5563; }
+button.danger { border-color: #7f1d1d; color: #fecaca; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 14px; }
+.card { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
+        padding: 12px 14px 8px; }
+.card header { margin: 0 0 8px; display: block; }
+.card .kind { font-family: ui-monospace, monospace; font-size: 11px; color: #7c8899; }
+.row { display: grid; grid-template-columns: 92px 1fr 72px; gap: 8px;
+       align-items: center; margin: 6px 0; }
+.row label { font-size: 12px; color: #d1d5db; overflow: hidden; text-overflow: ellipsis; }
+.row input[type=range] { width: 100%; accent-color: #60a5fa; }
+.row select { width: 100%; background: #1b1f26; color: #e5e7eb;
+              border: 1px solid #2d333b; border-radius: 4px; padding: 3px 6px; }
+.row .val { font-variant-numeric: tabular-nums; font-size: 12px; color: #93c5fd;
+            text-align: right; }
+.row .doc { grid-column: 1 / -1; font-size: 11px; color: #6b7280; margin: -4px 0 4px; }
+.hint { color: #6b7280; font-size: 12px; margin-top: 18px; }
+code { font-family: ui-monospace, monospace; color: #93c5fd; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="title">kaukonen</h1>
+    <p class="sub" id="sub">connecting…</p>
+  </div>
+  <div class="meter">
+    <div class="peak" id="peakbar"><i id="peakfill"></i></div>
+    <div class="stat">peak <b id="peak">—</b></div>
+    <div class="stat"><b id="elapsed">0.0</b>s</div>
+    <div class="stat">late <b id="late">0</b></div>
+  </div>
+</header>
+<div class="transport">
+  <label for="gain">gain</label>
+  <input id="gain" type="range" min="0" max="1" step="0.001" value="0.3" style="width:220px">
+  <span class="val" id="gainval">0.3</span>
+  <button id="mute">mute</button>
+  <button id="quit" class="danger">quit</button>
+</div>
+<div class="grid" id="grid"></div>
+<p class="hint">Sound comes out of the audio interface, not this page. These
+are the same knobs as <code>set cells.rate 400</code> at the console.
+A bank slider sets every instance.</p>
+<script>
+const $ = (id) => document.getElementById(id);
+let dragging = new Set();
+let started = performance.now();
+let muted = false;
+let last = null;
+
+function fromNorm(k, t) {
+  t = Math.min(1, Math.max(0, t));
+  if (k.taper === 'log' && k.min > 0 && k.max > 0)
+    return Math.exp(Math.log(k.min) + (Math.log(k.max) - Math.log(k.min)) * t);
+  return k.min + (k.max - k.min) * t;
+}
+function toNorm(k, v) {
+  if (k.taper === 'log' && k.min > 0 && k.max > 0)
+    return (Math.log(v) - Math.log(k.min)) / (Math.log(k.max) - Math.log(k.min));
+  if (k.max === k.min) return 0;
+  return (v - k.min) / (k.max - k.min);
+}
+function fmt(k, v) {
+  if (k.choices) return k.choices[Math.min(k.choices.length - 1, Math.max(0, Math.round(v)))];
+  const a = Math.abs(v);
+  const n = a >= 100 ? v.toFixed(1) : a >= 10 ? v.toFixed(2) : v.toFixed(3);
+  return n.replace(/\.?0+$/, '') + (k.unit ? ' ' + k.unit : '');
+}
+
+function render(state) {
+  $('title').textContent = state.patch.split('/').pop();
+  const bits = [state.device || 'no device'];
+  if (last && last.rate) bits.push(last.rate + ' Hz');
+  $('sub').textContent = bits.join(' · ') + ' · knobs on ' +
+    state.modules.map(m => m.count > 1 ? m.name + '[' + m.count + ']' : m.name).join('  ');
+  if (!dragging.has('gain')) {
+    $('gain').value = state.gain;
+    $('gainval').textContent = Number(state.gain).toFixed(2);
+  }
+  muted = !!state.muted;
+  $('mute').textContent = muted ? 'unmute' : 'mute';
+  if (state.peak != null) {
+    const p = Math.min(1, state.peak);
+    $('peak').textContent = p.toFixed(3);
+    $('peakfill').style.width = (p * 100) + '%';
+    const bar = $('peakbar');
+    bar.className = 'peak' + (p > 0.95 ? ' clip' : p > 0.7 ? ' hot' : '');
+  }
+  if (state.elapsed != null) $('elapsed').textContent = Number(state.elapsed).toFixed(1);
+  if (state.late != null) $('late').textContent = state.late;
+  const grid = $('grid');
+  if (grid.childElementCount === 0) {
+    state.modules.forEach(mod => grid.appendChild(card(mod)));
+  } else {
+    state.modules.forEach(mod => {
+      mod.knobs.forEach(k => {
+        const id = mod.name + '.' + k.name;
+        if (dragging.has(id)) return;
+        const input = document.querySelector('[data-id="' + CSS.escape(id) + '"]');
+        const readout = document.querySelector('[data-read="' + CSS.escape(id) + '"]');
+        if (!input) return;
+        if (k.choices) input.value = String(Math.round(k.value));
+        else input.value = toNorm(k, k.value);
+        if (readout) readout.textContent = fmt(k, k.value);
+      });
+    });
+  }
+}
+
+function card(mod) {
+  const el = document.createElement('section');
+  el.className = 'card';
+  const title = document.createElement('h2');
+  title.textContent = mod.count > 1 ? mod.name + '[' + mod.count + ']' : mod.name;
+  const kind = document.createElement('div');
+  kind.className = 'kind';
+  kind.textContent = mod.kind + (mod.count > 1 ? ' · slider sets every instance' : '');
+  el.appendChild(title);
+  el.appendChild(kind);
+  mod.knobs.forEach(k => {
+    const id = mod.name + '.' + k.name;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const lab = document.createElement('label');
+    lab.textContent = k.name;
+    lab.title = k.doc;
+    row.appendChild(lab);
+    let input;
+    if (k.choices) {
+      input = document.createElement('select');
+      k.choices.forEach((name, i) => {
+        const o = document.createElement('option');
+        o.value = String(i);
+        o.textContent = name;
+        input.appendChild(o);
+      });
+      input.value = String(Math.round(k.value));
+    } else {
+      input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '1';
+      input.step = '0.001';
+      input.value = toNorm(k, k.value);
+    }
+    input.dataset.id = id;
+    input.title = k.doc;
+    const val = document.createElement('span');
+    val.className = 'val';
+    val.dataset.read = id;
+    val.textContent = fmt(k, k.value);
+    const send = () => {
+      const raw = k.choices ? input.value : fromNorm(k, Number(input.value));
+      val.textContent = fmt(k, k.choices ? Number(input.value) : raw);
+      post('/api/set', { module: mod.name, knob: k.name, value: raw });
+    };
+    input.addEventListener('pointerdown', () => dragging.add(id));
+    input.addEventListener('pointerup', () => dragging.delete(id));
+    input.addEventListener('input', send);
+    row.appendChild(input);
+    row.appendChild(val);
+    el.appendChild(row);
+  });
+  return el;
+}
+
+async function post(path, body) {
+  try {
+    await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (e) { /* stream gone */ }
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state');
+    last = await r.json();
+    render(last);
+    if (last.quit) {
+      document.body.insertAdjacentHTML('afterbegin',
+        '<p class="sub">session ended.</p>');
+      return;
+    }
+  } catch (e) {
+    $('sub').textContent = 'lost the session. is play still running?';
+  }
+  setTimeout(poll, 250);
+}
+
+$('gain').addEventListener('pointerdown', () => dragging.add('gain'));
+$('gain').addEventListener('pointerup', () => dragging.delete('gain'));
+$('gain').addEventListener('input', () => {
+  const v = Number($('gain').value);
+  $('gainval').textContent = v.toFixed(2);
+  post('/api/gain', { value: v });
+});
+$('mute').addEventListener('click', () => post('/api/mute', { muted: !muted }));
+$('quit').addEventListener('click', () => post('/api/quit', {}));
+poll();
+</script>
+</body></html>
+"##;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaukonen::patch;
+
+    fn live_surface() -> Surface {
+        let text = std::fs::read_to_string("patches/live.kpatch").unwrap();
+        let built = patch::parse(&text).unwrap().build().unwrap();
+        Surface::from_built("patches/live.kpatch", "test device", 0.3, &built)
+    }
+
+    #[test]
+    fn a_patch_becomes_one_card_per_bank() {
+        let s = live_surface();
+        let names: Vec<&str> = s.modules.iter().map(|m| m.name.as_str()).collect();
+        assert!(names.contains(&"cells"));
+        assert!(names.contains(&"filt"));
+        let cells = s.find_bank("cells").unwrap();
+        assert_eq!(cells.count, 3);
+        assert_eq!(cells.indices.len(), 3);
+        assert!(cells.knobs.iter().any(|k| k.spec.name == "rate"));
+    }
+
+    #[test]
+    fn turning_a_bank_knob_names_every_instance() {
+        let mut s = live_surface();
+        let (indices, name, value, readout) = s.set_knob("cells", "rate", "400").unwrap();
+        assert_eq!(name, "rate");
+        assert!((value - 400.0).abs() < 1e-3);
+        assert_eq!(indices.len(), 3);
+        assert!(readout.contains("400"));
+        let cells = s.find_bank("cells").unwrap();
+        let rate = cells.knobs.iter().find(|k| k.spec.name == "rate").unwrap();
+        assert!((rate.value - 400.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn an_unknown_knob_is_refused() {
+        let mut s = live_surface();
+        let err = s.set_knob("filt", "flux", "1").unwrap_err();
+        assert!(err.contains("flux"), "{err}");
+        let err = s.set_knob("ghost", "cutoff", "1").unwrap_err();
+        assert!(err.contains("ghost"), "{err}");
+    }
+
+    #[test]
+    fn enum_knobs_take_their_names() {
+        let mut s = live_surface();
+        let (_, _, value, readout) = s.set_knob("brain", "rule", "bcm").unwrap();
+        assert!((value - 2.0).abs() < 1e-6 || readout == "bcm");
+        assert_eq!(readout, "bcm");
+    }
+
+    #[test]
+    fn json_round_trips_the_names_the_page_needs() {
+        let s = live_surface();
+        let json = s.to_json("\"elapsed\":1.5,\"peak\":0.2,\"late\":0");
+        assert!(json.contains("\"name\":\"cells\""));
+        assert!(json.contains("\"name\":\"rate\""));
+        assert!(json.contains("\"taper\":\"log\""));
+        assert!(json.contains("\"elapsed\":1.5"));
+        assert!(!json.contains("NaN"));
+    }
+
+    #[test]
+    fn the_tiny_json_reader_gets_strings_and_numbers() {
+        let body = r#"{"module":"cells","knob":"rate","value":400.5,"muted":true}"#;
+        assert_eq!(json_string(body, "module").unwrap(), "cells");
+        assert_eq!(json_string(body, "knob").unwrap(), "rate");
+        assert!((json_f32(body, "value").unwrap() - 400.5).abs() < 1e-5);
+        assert_eq!(json_bool(body, "muted"), Some(true));
+        assert_eq!(json_raw(body, "value").unwrap(), "400.5");
+    }
+
+    #[test]
+    fn parse_request_splits_a_post() {
+        let req = "POST /api/set HTTP/1.1\r\nContent-Length: 7\r\n\r\n{\"a\":1}";
+        let (method, path, body) = parse_request(req).unwrap();
+        assert_eq!(method, "POST");
+        assert_eq!(path, "/api/set");
+        assert_eq!(body, "{\"a\":1}");
+    }
+
+    #[test]
+    fn the_page_has_somewhere_to_put_the_knobs() {
+        assert!(PAGE.contains("id=\"grid\""));
+        assert!(PAGE.contains("/api/set"));
+        assert!(PAGE.contains("fromNorm"));
+    }
+
+    #[test]
+    fn a_loopback_server_answers_and_turns_a_knob() {
+        let surface = live_surface();
+        let panel = start(surface, Arc::new(Silent), 0).expect("bind");
+        let base = url(panel.addr);
+        let page = get(&format!("{base}/"));
+        assert!(page.contains("kaukonen"));
+        assert!(page.contains("id=\"grid\""));
+        let state = get(&format!("{base}/api/state"));
+        assert!(state.contains("\"name\":\"cells\""));
+        let response = post(
+            &format!("{base}/api/set"),
+            r#"{"module":"cells","knob":"rate","value":512}"#,
+        );
+        assert!(response.contains("\"ok\":true"), "{response}");
+        let locked = panel.surface.lock().unwrap();
+        let rate = locked
+            .find_bank("cells")
+            .unwrap()
+            .knobs
+            .iter()
+            .find(|k| k.spec.name == "rate")
+            .unwrap();
+        assert!((rate.value - 512.0).abs() < 1e-3);
+        panel.stop.store(true, Ordering::Relaxed);
+    }
+
+    fn get(url: &str) -> String {
+        fetch("GET", url, None)
+    }
+
+    fn post(url: &str, body: &str) -> String {
+        fetch("POST", url, Some(body))
+    }
+
+    fn fetch(method: &str, url: &str, body: Option<&str>) -> String {
+        let url = url.strip_prefix("http://").unwrap();
+        let (host, path) = url.split_once('/').unwrap();
+        let mut stream = TcpStream::connect(host).unwrap();
+        let extra = match body {
+            Some(b) => format!(
+                "Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{b}",
+                b.len()
+            ),
+            None => "\r\n".to_string(),
+        };
+        stream
+            .write_all(format!("{method} /{path} HTTP/1.1\r\nHost: {host}\r\n{extra}").as_bytes())
+            .unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf);
+        text.split("\r\n\r\n").nth(1).unwrap_or(&text).to_string()
+    }
+}

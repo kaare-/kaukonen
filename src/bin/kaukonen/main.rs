@@ -14,6 +14,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::time::Instant;
 
+mod panel;
+
 #[cfg(feature = "realtime")]
 mod live;
 
@@ -32,6 +34,8 @@ usage:
   kaukonen play    --patch P [--device D] [--rate HZ] [--block N] [--input]
                             [--in-device D] [--in-channel N] [--out-left N] [--out-right N]
                             [--gain G] [--set mod.knob=V] [--record W] [--seconds S]
+                            [--port N] [--no-web] [--no-browser]
+  kaukonen serve   --patch P [--port N] [--no-browser]
 
   render   run a patch, writing audio, a trace and a scope page
   inspect  list a patch's modules, knobs, cables and feedback loops
@@ -40,7 +44,8 @@ usage:
   bench    how fast a patch runs, as a factor of real time
   probe    nudge one knob and report how far the two runs diverge
   devices  what audio hardware is available, and what it can do
-  play     play a patch through an audio interface, knobs adjustable live
+  play     play a patch through an audio interface; knobs live in the browser
+  serve    the same control page, without audio, so the layout can be checked
 
 devices and play need the realtime feature:
   cargo run --release --features realtime -- devices
@@ -73,6 +78,7 @@ fn run(argv: &[String]) -> Result<(), String> {
         "probe" => cmd_probe(&args),
         "devices" => cmd_devices(&args),
         "play" => cmd_play(&args),
+        "serve" => cmd_serve(&args),
         other => Err(format!(
             "unknown command '{other}'. Run `kaukonen --help` for the list."
         )),
@@ -125,7 +131,29 @@ fn cmd_play(args: &Args) -> Result<(), String> {
         record: args.get("record"),
         seconds: args.get_f32("seconds")?,
         quiet: args.flag("quiet"),
+        port: args.get_usize("port")?.map(|p| p as u16).unwrap_or(7420),
+        web: !args.flag("no-web"),
+        open_browser: !args.flag("no-browser") && !args.flag("quiet"),
     })
+}
+
+fn cmd_serve(args: &Args) -> Result<(), String> {
+    args.reject_unknown(&["patch", "port", "no-browser"])?;
+    let source = args.require("patch")?;
+    let patch = load(source)?;
+    let built = patch.build().map_err(|e| format!("{source}: {e}"))?;
+    let port = args.get_usize("port")?.map(|p| p as u16).unwrap_or(7420);
+    let surface = panel::Surface::from_built(source, "no device", 0.3, &built);
+    let started = panel::start(surface, std::sync::Arc::new(panel::Silent), port)?;
+    let url = panel::url(started.addr);
+    println!("panel    {url}");
+    println!("         no audio; this is the control surface on its own.");
+    println!("         quit from the page, or Ctrl-C.");
+    if !args.flag("no-browser") {
+        panel::open_browser(&url);
+    }
+    panel::wait_until_quit(&started.stop, None);
+    Ok(())
 }
 
 // ---------------------------------------------------------------- commands
