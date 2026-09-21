@@ -27,6 +27,8 @@ pub struct Surface {
     pub input: InputView,
     pub map: Map,
     pub modules: Vec<Bank>,
+    /// `(bank, knob)` pairs pinned at the top of the page.
+    pub desk: Vec<(String, String)>,
 }
 
 /// Capture side of the page: enable, device, channel, and what is plugged in.
@@ -210,6 +212,7 @@ impl Surface {
             },
             map: Map::of(&built.network, &Schedule::build(&built.network)),
             modules,
+            desk: built.desk.clone(),
         }
     }
 
@@ -271,6 +274,18 @@ impl Surface {
             out.push(',');
             out.push_str(extra);
         }
+        out.push_str(",\"desk\":[");
+        for (i, (module, knob)) in self.desk.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push('{');
+            push_str(&mut out, "module", module);
+            out.push(',');
+            push_str(&mut out, "knob", knob);
+            out.push('}');
+        }
+        out.push(']');
         out.push_str(",\"modules\":[");
         for (i, bank) in self.modules.iter().enumerate() {
             if i > 0 {
@@ -830,6 +845,12 @@ button.danger { border-color: #7f1d1d; color: #fecaca; }
             text-align: right; }
 .row .doc { grid-column: 1 / -1; font-size: 11px; color: #6b7280; margin: -4px 0 4px; }
 .hint { color: #6b7280; font-size: 12px; margin-top: 18px; }
+.deskwrap { background: #12151a; border: 1px solid #2a3a32; border-radius: 8px;
+            padding: 10px 12px 8px; margin-bottom: 14px; }
+.deskwrap header { display: flex; justify-content: space-between; align-items: baseline;
+                   margin-bottom: 8px; }
+.deskwrap .grid { margin: 0; }
+.deskwrap .card { border-color: #2a3a32; }
 .mapwrap { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
            padding: 10px 12px 8px; margin-bottom: 18px; }
 .mapwrap header { display: flex; justify-content: space-between; align-items: baseline;
@@ -879,6 +900,14 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
   <div class="stat">in <b id="inpeak">—</b></div>
 </div>
 <p class="note" id="inputhint"></p>
+<div class="deskwrap" id="deskwrap" hidden>
+  <header>
+    <h2>desk</h2>
+    <span class="stat" id="deskstat"></span>
+  </header>
+  <div class="grid" id="desk"></div>
+  <p class="note">These stay at the top. The rest of the rack is below the map.</p>
+</div>
 <div class="mapwrap" id="mapwrap" hidden>
   <header>
     <h2>patch</h2>
@@ -944,21 +973,52 @@ function render(state) {
   if (state.map && !$('mapscroll').dataset.drawn) drawMap(state.map);
   const grid = $('grid');
   if (grid.childElementCount === 0) {
+    renderDesk(state);
     state.modules.forEach(mod => grid.appendChild(card(mod)));
   } else {
     state.modules.forEach(mod => {
       mod.knobs.forEach(k => {
         const id = mod.name + '.' + k.name;
         if (dragging.has(id)) return;
-        const input = document.querySelector('[data-id="' + CSS.escape(id) + '"]');
-        const readout = document.querySelector('[data-read="' + CSS.escape(id) + '"]');
-        if (!input) return;
-        if (k.choices) input.value = String(Math.round(k.value));
-        else input.value = toNorm(k, k.value);
-        if (readout) readout.textContent = fmt(k, k.value);
+        document.querySelectorAll('[data-id="' + CSS.escape(id) + '"]').forEach(input => {
+          if (k.choices) input.value = String(Math.round(k.value));
+          else input.value = toNorm(k, k.value);
+        });
+        document.querySelectorAll('[data-read="' + CSS.escape(id) + '"]').forEach(readout => {
+          readout.textContent = fmt(k, k.value);
+        });
       });
     });
   }
+}
+
+function renderDesk(state) {
+  const wrap = $('deskwrap');
+  const host = $('desk');
+  const items = state.desk || [];
+  if (!items.length) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  const groups = [];
+  items.forEach(item => {
+    let g = groups.find(x => x.name === item.module);
+    if (!g) {
+      const mod = state.modules.find(m => m.name === item.module);
+      if (!mod) return;
+      g = { name: item.module, mod, knobs: [] };
+      groups.push(g);
+    }
+    const knob = g.mod.knobs.find(k => k.name === item.knob);
+    if (knob && !g.knobs.some(k => k.name === knob.name)) g.knobs.push(knob);
+  });
+  $('deskstat').textContent = groups.length + ' · ' +
+    items.length + ' knob' + (items.length === 1 ? '' : 's');
+  groups.forEach(g => {
+    host.appendChild(card({ name: g.mod.name, kind: g.mod.kind,
+      count: g.mod.count, knobs: g.knobs }, 'desk-'));
+  });
 }
 
 function renderInput(state) {
@@ -1111,17 +1171,18 @@ function focusBank(bank) {
   document.querySelectorAll('svg.map g[data-bank="' + CSS.escape(bank) + '"] .module')
     .forEach(el => el.classList.add('on'));
   document.querySelectorAll('.card').forEach(el => el.classList.remove('focus'));
-  const card = document.getElementById('card-' + bank);
+  const card = document.getElementById('desk-' + bank) ||
+    document.getElementById('card-' + bank);
   if (card) {
     card.classList.add('focus');
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
-function card(mod) {
+function card(mod, idPrefix) {
   const el = document.createElement('section');
   el.className = 'card';
-  el.id = 'card-' + mod.name;
+  el.id = (idPrefix || 'card-') + mod.name;
   const title = document.createElement('h2');
   title.textContent = mod.count > 1 ? mod.name + '[' + mod.count + ']' : mod.name;
   const kind = document.createElement('div');
@@ -1349,6 +1410,13 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
+        assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
+        assert!(s.desk.iter().any(|(m, k)| m == "miclim" && k == "threshold"));
+        assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
+        let json = s.to_json("");
+        assert!(json.contains("\"desk\":["));
+        assert!(json.contains("\"module\":\"split\""));
     }
 
     #[test]
@@ -1413,6 +1481,8 @@ mod tests {
         assert!(PAGE.contains("id=\"inchannel\""));
         assert!(PAGE.contains("id=\"inpeak\""));
         assert!(PAGE.contains("id=\"mapwrap\""));
+        assert!(PAGE.contains("id=\"deskwrap\""));
+        assert!(PAGE.contains("renderDesk"));
         assert!(PAGE.contains("drawMap"));
         assert!(PAGE.contains("focusBank"));
     }

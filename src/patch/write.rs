@@ -23,6 +23,16 @@ impl std::fmt::Display for Patch {
         if self.config.seconds != d.seconds {
             writeln!(f, "seconds {}", trim_float(self.config.seconds))?;
         }
+        if !self.desk.is_empty() {
+            write!(f, "desk")?;
+            for item in &self.desk {
+                match &item.knob {
+                    Some(knob) => write!(f, " {}.{knob}", item.module)?,
+                    None => write!(f, " {}", item.module)?,
+                }
+            }
+            writeln!(f)?;
+        }
 
         if !self.modules.is_empty() {
             writeln!(f)?;
@@ -94,6 +104,7 @@ rail 8
 seed 7
 mismatch 0.05
 seconds 2
+desk cells.rate
 module src source shape=pulse freq=1.4 amp=2.2
 module brain tc3 natural_decay=0.015
 module cells rc1[4] preset=burst rate=90
@@ -129,6 +140,10 @@ record cells[*].v brain.activity *
             );
         }
         assert_eq!(second.records.len(), 3);
+        assert_eq!(first.desk.len(), second.desk.len());
+        for (a, b) in first.desk.iter().zip(&second.desk) {
+            assert_eq!((&a.module, &a.knob), (&b.module, &b.knob));
+        }
         // A second pass is textually identical, so the form is canonical.
         assert_eq!(text, second.to_string());
     }

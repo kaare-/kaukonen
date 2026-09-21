@@ -83,6 +83,15 @@ pub struct CableDecl {
     pub line: usize,
 }
 
+/// One entry on a `desk` line: a bank, or one of its knobs, pinned on the page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeskDecl {
+    pub module: String,
+    /// `None` means every knob on the bank.
+    pub knob: Option<String>,
+    pub line: usize,
+}
+
 /// One entry on a `record` line.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RecordDecl {
@@ -148,6 +157,8 @@ pub struct Patch {
     pub knobs: Vec<KnobDecl>,
     pub cables: Vec<CableDecl>,
     pub records: Vec<RecordDecl>,
+    /// Knobs the live page should keep at the top, in this order.
+    pub desk: Vec<DeskDecl>,
 }
 
 /// A patch turned into a runnable network.
@@ -158,6 +169,8 @@ pub struct BuiltPatch {
     pub seconds: f32,
     /// Resolved recorder channel names, in `label.field` form.
     pub channels: Vec<String>,
+    /// `(bank, knob)` pairs the live page pins at the top.
+    pub desk: Vec<(String, String)>,
 }
 
 /// A problem with a patch file, located by line.
@@ -331,11 +344,44 @@ impl Patch {
         }
         channels.dedup();
 
+        let mut desk = Vec::new();
+        for item in &self.desk {
+            let bank = find_bank(&item.module, item.line)?;
+            let module = network.get(crate::network::ModuleId(bank.first));
+            match &item.knob {
+                Some(name) => {
+                    if param::find_spec(module.params(), name).is_none() {
+                        return Err(PatchError::at(
+                            item.line,
+                            format!(
+                                "module kind '{}' has no knob '{name}' (knobs: {})",
+                                module.kind_name(),
+                                module
+                                    .params()
+                                    .iter()
+                                    .map(|p| p.name)
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                        ));
+                    }
+                    desk.push((item.module.clone(), name.clone()));
+                }
+                None => {
+                    for spec in module.params() {
+                        desk.push((item.module.clone(), spec.name.to_string()));
+                    }
+                }
+            }
+        }
+        desk.dedup();
+
         Ok(BuiltPatch {
             network,
             config: self.config.sim(),
             seconds: self.config.seconds,
             channels,
+            desk,
         })
     }
 
@@ -612,6 +658,30 @@ record cells[*].v brain.w00 brain.activity
     }
 
     #[test]
+    fn desk_pins_named_knobs_and_whole_banks() {
+        let built = parse(
+            "module cells rc1[2] preset=burst\n\
+             module filt svf\n\
+             desk cells.rate filt\n",
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert_eq!(
+            built.desk,
+            vec![
+                ("cells".into(), "rate".into()),
+                ("filt".into(), "cutoff".into()),
+                ("filt".into(), "cv_depth".into()),
+                ("filt".into(), "q".into()),
+                ("filt".into(), "q_depth".into()),
+                ("filt".into(), "drive".into()),
+                ("filt".into(), "level".into()),
+            ]
+        );
+    }
+
+    #[test]
     fn output_jacks_are_recordable() {
         let built = parse("module n neuron\nrecord n.out n.v\n")
             .unwrap()
@@ -637,6 +707,8 @@ record cells[*].v brain.w00 brain.activity
             ("module a rc1 preset=wobble\n", 1, "no preset"),
             ("module a neuron preset=burst\n", 1, "has no presets"),
             ("module a rc1\nknob a.bias 99\n", 2, "outside"),
+            ("module a rc1\ndesk ghost.rate\n", 2, "no module named"),
+            ("module a rc1\ndesk a.flux\n", 2, "has no knob"),
         ];
         for (text, line, needle) in cases {
             let err = parse(text)

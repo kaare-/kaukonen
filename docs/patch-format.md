@@ -117,6 +117,23 @@ patch layer[i].out -> cells[i].in
 Index-matching requires equal counts, or one side having a single instance, in
 which case it fans out.
 
+## Desk
+
+```
+desk <module[.knob]> [<module[.knob]> ...]
+```
+
+Pins knobs at the top of the live page so a large rack still has a playable
+surface. A bank name without a knob pins every knob on that bank. A slider
+on the desk is the same control as `set split.cutoff` at the console.
+
+```
+desk split.cutoff split.q band.cutoff band.q
+desk miclim outcomp.threshold outcomp.ratio
+```
+
+Unknown modules or knobs are an error. Several `desk` lines append.
+
 ## Recording
 
 ```

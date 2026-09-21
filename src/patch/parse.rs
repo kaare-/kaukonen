@@ -1,7 +1,8 @@
 //! Text to [`Patch`]. Line oriented, hand written, errors carry line numbers.
 
 use super::{
-    CableDecl, JackRef, KnobDecl, ModuleDecl, Patch, PatchConfig, PatchError, RecordDecl, Selector,
+    CableDecl, DeskDecl, JackRef, KnobDecl, ModuleDecl, Patch, PatchConfig, PatchError, RecordDecl,
+    Selector,
 };
 use crate::param::trim_float;
 
@@ -52,12 +53,13 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
             "knob" => patch.knobs.push(parse_knob(&rest, line)?),
             "patch" => patch.cables.push(parse_cable(&rest, line)?),
             "record" => parse_record(&rest, line, &mut patch.records)?,
+            "desk" => parse_desk(&rest, line, &mut patch.desk)?,
             other => {
                 return Err(PatchError::at(
                     line,
                     format!(
                         "unknown directive '{other}' (expected dt, rate, oversample, rail, seed, \
-                         mismatch, seconds, module, knob, patch or record)"
+                         mismatch, seconds, module, knob, patch, record or desk)"
                     ),
                 ))
             }
@@ -255,6 +257,40 @@ fn parse_jack(token: &str, line: usize) -> Result<JackRef, PatchError> {
     })
 }
 
+/// `desk <module[.knob]> [<module[.knob]> ...]`
+fn parse_desk(tokens: &[&str], line: usize, out: &mut Vec<DeskDecl>) -> Result<(), PatchError> {
+    if tokens.is_empty() {
+        return Err(PatchError::at(
+            line,
+            "desk takes knobs, e.g. `desk split.cutoff band.q` or a bank name",
+        ));
+    }
+    for token in tokens {
+        if token.contains('.') {
+            let (module, selector, knob) = split_dotted(token, line)?;
+            if selector != Selector::Single {
+                return Err(PatchError::at(
+                    line,
+                    "desk names a bank, not an instance; use `split.cutoff`",
+                ));
+            }
+            out.push(DeskDecl {
+                module,
+                knob: Some(knob),
+                line,
+            });
+        } else {
+            check_ident(token, line)?;
+            out.push(DeskDecl {
+                module: (*token).to_string(),
+                knob: None,
+                line,
+            });
+        }
+    }
+    Ok(())
+}
+
 /// `record <chan> [<chan> ...]` or `record *`
 fn parse_record(tokens: &[&str], line: usize, out: &mut Vec<RecordDecl>) -> Result<(), PatchError> {
     if tokens.is_empty() {
@@ -413,6 +449,16 @@ mod tests {
     }
 
     #[test]
+    fn desk_accepts_a_bank_or_a_knob() {
+        let patch = parse("module a rc1\nmodule b svf\ndesk a.rate b\n").unwrap();
+        assert_eq!(patch.desk.len(), 2);
+        assert_eq!(patch.desk[0].module, "a");
+        assert_eq!(patch.desk[0].knob.as_deref(), Some("rate"));
+        assert_eq!(patch.desk[1].module, "b");
+        assert_eq!(patch.desk[1].knob, None);
+    }
+
+    #[test]
     fn syntax_errors_report_their_line() {
         let cases = [
             ("module a rc1\nwobble 3\n", 2, "unknown directive"),
@@ -433,6 +479,7 @@ mod tests {
                 "takes a target and a value",
             ),
             ("module a rc1\nrecord\n", 2, "record takes channels"),
+            ("module a rc1\ndesk\n", 2, "desk takes knobs"),
             (
                 "module a rc1\npatch a[q].out -> a.in\n",
                 2,

@@ -32,6 +32,8 @@
 # envelopes steer different parts of the climate. Low turns the sky,
 # mid leans on the rain and the ring, high tickles the grit clocks.
 # A tunable compressor sits on the stereo mix after the output band.
+# Those four sit on the live page desk: mic split, output band,
+# limiter and compressor.
 #
 #   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
 #   (256 is often fine; raise --block if `late` climbs)
@@ -82,6 +84,9 @@ oversample 2
 seconds 12
 seed 23
 mismatch 0.06
+desk split.cutoff split.q band.cutoff band.q
+desk miclim.threshold miclim.ratio
+desk outcomp.threshold outcomp.ratio outcomp.attack outcomp.release
 
 module adc      audioin   gain=1.5 env_rate=10
 module miclim   comp      threshold=1.05 ratio=20 attack=0.0004 release=0.08 knee=0.15 makeup=1 mix=1

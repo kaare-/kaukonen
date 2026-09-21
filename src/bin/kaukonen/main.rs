@@ -398,6 +398,18 @@ fn cmd_inspect(args: &Args) -> Result<(), String> {
     if !built.channels.is_empty() {
         println!("  {}", built.channels.join(" "));
     }
+    if !built.desk.is_empty() {
+        println!("\ndesk ({})", built.desk.len());
+        println!(
+            "  {}",
+            built
+                .desk
+                .iter()
+                .map(|(m, k)| format!("{m}.{k}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+    }
     Ok(())
 }
 
