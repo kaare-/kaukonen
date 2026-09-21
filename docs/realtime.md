@@ -1,115 +1,177 @@
-# Playing a patch live
+# Playing a patch through an audio interface
 
-The offline renderer owns the clock: it runs a patch as fast as it can and
-writes a file. A real-time host owns the clock instead — it hands over a buffer
-and expects it filled before a deadline. [`Stream`](../src/stream.rs) is that
-side of the arrangement.
+```bash
+cargo build --release --features realtime
 
-There is deliberately no audio backend in this crate. Keeping it dependency free
-is worth more than saving a host a dozen lines, and the part that is easy to get
-wrong is the simulation, not the glue.
-
-## The shape of it
-
-```rust
-use kaukonen::{patch, Stream};
-
-let text = std::fs::read_to_string("patches/voice.kpatch")?;
-let built = patch::parse(&text)?.build()?;
-let mut stream = Stream::new(built);
-
-// The host must run at this rate. One engine frame becomes one host frame, so
-// nothing resamples on either side.
-let rate = stream.sample_rate();
-
-// In the audio callback, for an interleaved buffer:
-stream.process(&mut buffer, channels);
-
-// Or, with live input:
-stream.process_duplex(&input, &mut buffer, channels);
+./target/release/kaukonen devices
+./target/release/kaukonen play --patch patches/voice.kpatch --device scarlett --block 256
 ```
 
-`process` allocates nothing and takes no locks. A patch with no `audioout` fills
-the buffer with silence rather than leaving whatever the host had there.
+The simulator itself has no dependencies. Talking to hardware needs one, so it
+sits behind the `realtime` feature and nothing else in the crate touches it.
+Without the feature, `devices` and `play` tell you what to rebuild with.
 
-`Stream::new` switches capture off on every converter, because a stream runs
-indefinitely and a growing file buffer would be a leak with a long fuse. Read
-frames as they go; do not expect to collect a file at the end.
-
-The streaming path and the file path are the same simulation. There is a test
-asserting a streamed patch matches its offline render to within 1e-6, so a patch
-cannot sound different live from how it rendered.
-
-## Matching rates
-
-Set the patch's `rate` to the rate the device will run at:
+## Finding the interface
 
 ```
-rate 48000
-oversample 2
+$ kaukonen devices
+output devices (3)
+  [0] default  (default)
+        channels 2   rates 44100 48000 96000   formats F32 I16
+        buffer 16..8192 frames
+  [1] Scarlett 4i4 USB
+        channels 2/4   rates 44100 48000 88200 96000 176400 192000   formats F32 I16
+        buffer 16..8192 frames
 ```
 
-`oversample` costs CPU without changing the frame rate, which is the knob to
-reach for if a patch aliases. If the host insists on a rate the patch was not
-written for, change the patch rather than resampling — everything in the rack is
-specified in seconds and hertz, so it transposes cleanly.
+`--device` takes an index or any part of a name, so `--device scarlett` is
+enough. If the fragment matches more than one device it says so rather than
+guessing. `--in-device` selects the capture side separately, since the two are
+not always the same device.
 
-## Will it keep up?
+On Linux, ALSA prints complaints on stderr about every backend it cannot reach —
+JACK not running, no `/dev/dsp`, PulseAudio refused. They are noise from
+alsa-lib, not from this. Redirect with `2>/dev/null` if they get in the way.
 
-An average faster than real time is not enough. One block that misses its
-deadline is an audible dropout, so what matters is the worst case:
+## Rate, block size and latency
+
+The device owns the clock, so the rack is rebuilt at the device's rate rather
+than resampled. Everything in a patch is specified in seconds and hertz, so it
+moves cleanly; only the frame rate changes. A patch saying `rate 48000` played on
+a 44.1 kHz device runs at 44.1 kHz, and `play` says so.
+
+```
+device   Scarlett 4i4 USB
+format   48000 Hz, 2 channels, F32
+block    256 frames (5.3 ms of latency per buffer)
+```
+
+- `--rate 96000` asks for a rate. If the device refuses, the nearest supported
+  rate is used and reported.
+- `--block 256` pins the buffer size, clamped to what the device allows. Smaller
+  is lower latency and less headroom. Without it the device picks.
+- `--channels 4` asks for a channel count, for an interface with more than two
+  outputs.
+
+Only f32 and i16 are handled. Devices — especially behind ALSA's `plug` layer —
+advertise far more; f32 is preferred, then i16.
+
+## Routing on a multi-output interface
+
+Channels are numbered from 1, as they are on the front of the box:
+
+```bash
+kaukonen play --patch p.kpatch --device scarlett --out-left 3 --out-right 4
+kaukonen play --patch p.kpatch --device scarlett --input --in-channel 2
+```
+
+Everything not routed is left silent. Input is taken from one channel, summed to
+mono, and handed to every `audioin` in the patch.
+
+## Turning knobs while it plays
+
+`play` is a console. Every knob in the rack is reachable by the name the patch
+gave it, and changes take effect at the next buffer.
+
+```
+playing. Type `help` for the controls, `quit` to stop.
+> modules
+  cells[0]         rc1
+  cells[1]         rc1
+  ...
+> knobs filt
+  filt (vcf)
+    cutoff           5..18000                 default 800 Hz
+    resonance        0..1.3                   default 0.3
+    ...
+> set filt.cutoff 4000
+  filt.cutoff = 4000 Hz
+> set cells.rate 400
+  cells.rate = 400  (3 instances)
+> gain 0.3
+> mute
+> quit
+```
+
+| command | what it does |
+| --- | --- |
+| `set <module>.<knob> <value>` | Turn a knob. A bank name without an index sets every instance. |
+| `knobs <module>` | That module's knobs, with ranges and defaults. |
+| `modules` | What is in the rack. |
+| `gain <value>` | Master output trim, on top of the patch's own levels. |
+| `mute` / `unmute` | Fade out and back in. |
+| `stats` | Stream health now. |
+| `quit` | Fade out and stop. |
+
+Values are validated against the knob's range before being sent, so a typo is
+refused rather than doing something surprising mid-performance. Enum knobs take
+their names: `set amp.response exponential`.
+
+`--set module.knob=value` does the same thing at launch, repeatably, which is
+how to try a variation without editing the patch.
+
+## Is it keeping up?
+
+While playing, a line every couple of seconds:
+
+```
+   6.0s  peak 0.412  blocks 1126  late 0  worst 476 us  of 5333 us (9% used)
+```
+
+`late` counts buffers that took longer than their own deadline; each one is a
+dropout waiting to happen. `worst` against the deadline is the number to watch —
+9% used is comfortable, 80% is not. If `late` starts climbing, raise `--block`,
+lower the patch's `oversample`, or thin the rack.
+
+`bench --block 256` gives the same figures without touching hardware, which is
+worth doing before plugging anything in:
 
 ```
 $ kaukonen bench --patch patches/voice.kpatch --block 256
-  ...
   streaming 256-frame blocks: 5333.3 us deadline, 365.4 us mean, 460.4 us worst
   worst-case headroom x11.58
 ```
 
-Headroom below 1 means it would drop out; below 2 is tight, since a real audio
-thread shares a machine with everything else. A 48-cell rack at 48 kHz with 4x
-oversampling reports x0.81 and says so plainly rather than pretending.
+## Recording what came out
 
-## Wiring it to cpal
+`--record session.wav` captures exactly what was sent to the device, after the
+master gain, any fade and any clipping — so the file is what you heard, not the
+rack's output before the monitoring chain.
 
-Roughly this, in your own binary, with cpal as your dependency rather than this
-crate's:
+Writing happens on its own thread. If it ever falls behind, audio is dropped
+from the *recording* and counted, never from the output.
 
-```rust
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+## Levels and speakers
 
-let device = cpal::default_host()
-    .default_output_device()
-    .expect("no output device");
-let channels = 2;
-let config = cpal::StreamConfig {
-    channels: channels as u16,
-    sample_rate: cpal::SampleRate(stream.sample_rate() as u32),
-    buffer_size: cpal::BufferSize::Fixed(256),
-};
+The converter soft-clips at full scale, so nothing leaves the rack above it, and
+each `audioout` has `level` and `headroom` knobs. Output fades up over 50 ms at
+the start and down at the end, so starting and stopping does not put a step
+through whatever is connected.
 
-let output = device.build_output_stream(
-    &config,
-    move |buffer: &mut [f32], _| stream.process(buffer, channels),
-    |err| eprintln!("stream error: {err}"),
-    None,
-)?;
-output.play()?;
+Even so: start with `--gain 0.2`, check `peak` in the status line, and turn it up
+from there. A patch with feedback can get much louder than the one you tested.
+
+## JACK and PipeWire
+
+ALSA is used by default, which also covers PipeWire through its ALSA
+compatibility layer. For JACK proper:
+
+```bash
+cargo build --release --features jack
 ```
 
-Two things to get right, neither of which this crate can do for you:
+## What has and has not been tested
 
-- **Do not allocate, lock or log in the callback.** `process` does not; make
-  sure your closure does not either.
-- **Duplex needs a ring buffer.** cpal's input and output are separate streams
-  with separate clocks, so feeding `process_duplex` directly from an input
-  callback will eventually drift. Put a ring buffer between them and accept the
-  latency, or run output-only and play files in through `audioin`.
+Verified here, against an ALSA device backed by a file rather than hardware:
+device enumeration and selection, rate and format negotiation, the callback,
+routing, the fade, live knob and gain changes taking effect mid-stream, and
+recording. The audio captured off that device is **bit-identical** to the same
+patch rendered offline, after the deliberate fade-in.
 
-## What has not been tested
-
-`Stream` is covered by unit tests, including the match against the offline
-render, the independence of block size, and the absence of buffer growth. The
-cpal glue above is not: the machine this was developed on has no audio hardware,
-so no sound has come out of a speaker. Treat the snippet as a sketch of the
-shape rather than as something known to work.
+Not verified: any real converter. The machine this was built on has no audio
+hardware, so no sound has come out of a speaker, and nothing here has met a
+device that enforces a real clock. The parts most likely to need adjustment on
+first contact are buffer sizes near a device's minimum, and duplex drift —
+cpal's input and output are separate streams with separate clocks, so the ring
+buffer between them will slowly slide even on an interface that is
+hardware-locked. `input short` in the status line is that happening.

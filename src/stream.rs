@@ -10,9 +10,16 @@
 //! glue around [`Stream::process`]. See `docs/realtime.md`.
 
 use crate::engine::Engine;
+use crate::module::AnalogModule;
 use crate::network::ModuleId;
 use crate::patch::BuiltPatch;
 use crate::types::Volt;
+
+/// A stream is handed to a host's audio thread, so it has to be movable there.
+const _: () = {
+    const fn assert_send<T: Send>() {}
+    assert_send::<Stream>();
+};
 
 /// A patch wired up for buffer-at-a-time playback.
 pub struct Stream {
@@ -29,6 +36,7 @@ impl Stream {
     /// Capture is switched off on every converter, because a stream runs
     /// indefinitely and a growing file buffer would be a leak with a long fuse.
     pub fn new(built: BuiltPatch) -> Self {
+        let rate = built.config.sample_rate;
         let mut engine = Engine::new(built.network, built.config);
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
@@ -39,6 +47,10 @@ impl Stream {
             }
             if let Some(out) = module.as_audio_out_mut() {
                 out.set_capturing(false);
+                // The host consumes one frame per engine frame, so the
+                // converter's anti-alias corner has to sit below the host's
+                // Nyquist, not below whatever its knob happened to say.
+                out.rate = rate;
                 outputs.push(index);
             }
         }
@@ -47,6 +59,22 @@ impl Stream {
             inputs,
             outputs,
         }
+    }
+
+    /// Set a knob on one module by index, for a host changing it mid-stream.
+    ///
+    /// Takes a `&'static str` because it is meant to be called from an audio
+    /// callback: the name comes from a [`crate::param::ParamSpec`], so passing
+    /// it costs no allocation.
+    pub fn set_knob(&mut self, module: usize, knob: &'static str, value: f32) -> bool {
+        if module >= self.engine.network.len() {
+            return false;
+        }
+        self.engine
+            .network
+            .get_mut(ModuleId(module))
+            .set_param(knob, value)
+            .is_ok()
     }
 
     /// The rate a host must run at for this stream to be in time.

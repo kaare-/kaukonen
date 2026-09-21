@@ -5,6 +5,8 @@
 //! plasticity, nonlinear excitability, and feedback.
 
 pub mod audio;
+#[cfg(feature = "realtime")]
+pub mod backend;
 pub mod engine;
 pub mod integrate;
 pub mod module;

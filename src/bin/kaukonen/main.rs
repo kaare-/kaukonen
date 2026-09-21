@@ -14,6 +14,9 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::time::Instant;
 
+#[cfg(feature = "realtime")]
+mod live;
+
 const USAGE: &str = "\
 kaukonen — patchable analog neural modules
 
@@ -23,8 +26,12 @@ usage:
   kaukonen inspect --patch P [--verbose]
   kaukonen modules [--kind K] [--markdown]
   kaukonen sweep   --patch P --knob T --from A --to B [--steps N] [--dir D] [--seconds S]
-  kaukonen bench   --patch P [--seconds S]
+  kaukonen bench   --patch P [--seconds S] [--block N]
   kaukonen probe   --patch P --knob T [--epsilon E] [--seconds S]
+  kaukonen devices [--verbose]
+  kaukonen play    --patch P [--device D] [--rate HZ] [--block N] [--input]
+                            [--in-device D] [--in-channel N] [--out-left N] [--out-right N]
+                            [--gain G] [--set mod.knob=V] [--record W] [--seconds S]
 
   render   run a patch, writing audio, a trace and a scope page
   inspect  list a patch's modules, knobs, cables and feedback loops
@@ -32,6 +39,11 @@ usage:
   sweep    render a bank of variations of one knob
   bench    how fast a patch runs, as a factor of real time
   probe    nudge one knob and report how far the two runs diverge
+  devices  what audio hardware is available, and what it can do
+  play     play a patch through an audio interface, knobs adjustable live
+
+devices and play need the realtime feature:
+  cargo run --release --features realtime -- devices
 ";
 
 fn main() {
@@ -59,10 +71,61 @@ fn run(argv: &[String]) -> Result<(), String> {
         "sweep" => cmd_sweep(&args),
         "bench" => cmd_bench(&args),
         "probe" => cmd_probe(&args),
+        "devices" => cmd_devices(&args),
+        "play" => cmd_play(&args),
         other => Err(format!(
             "unknown command '{other}'. Run `kaukonen --help` for the list."
         )),
     }
+}
+
+#[cfg(not(feature = "realtime"))]
+fn needs_realtime(command: &str) -> Result<(), String> {
+    Err(format!(
+        "`{command}` talks to audio hardware, which is behind the realtime feature.\n\
+         Rebuild with it:\n    cargo run --release --features realtime -- {command} ..."
+    ))
+}
+
+#[cfg(not(feature = "realtime"))]
+fn cmd_devices(_args: &Args) -> Result<(), String> {
+    needs_realtime("devices")
+}
+
+#[cfg(not(feature = "realtime"))]
+fn cmd_play(_args: &Args) -> Result<(), String> {
+    needs_realtime("play")
+}
+
+#[cfg(feature = "realtime")]
+fn cmd_devices(args: &Args) -> Result<(), String> {
+    args.reject_unknown(live::DEVICES_OPTIONS)?;
+    live::devices(args.flag("verbose"))
+}
+
+#[cfg(feature = "realtime")]
+fn cmd_play(args: &Args) -> Result<(), String> {
+    args.reject_unknown(live::PLAY_OPTIONS)?;
+    let routing = live::Routing {
+        left: args.get_usize("out-left")?.unwrap_or(1).saturating_sub(1),
+        right: args.get_usize("out-right")?.unwrap_or(2).saturating_sub(1),
+        input: args.get_usize("in-channel")?.unwrap_or(1).saturating_sub(1),
+    };
+    live::play(live::PlayArgs {
+        source: args.require("patch")?,
+        device: args.get("device"),
+        in_device: args.get("in-device"),
+        want_input: args.flag("input"),
+        rate: args.get_usize("rate")?.map(|r| r as u32),
+        block: args.get_usize("block")?.map(|b| b as u32),
+        channels: args.get_usize("channels")?.map(|c| c as u16),
+        routing,
+        gain: args.get_f32("gain")?.unwrap_or(1.0),
+        sets: args.all("set"),
+        record: args.get("record"),
+        seconds: args.get_f32("seconds")?,
+        quiet: args.flag("quiet"),
+    })
 }
 
 // ---------------------------------------------------------------- commands
@@ -862,6 +925,16 @@ impl Args {
             .find(|(key, _)| key == name)
             .map(|(_, value)| value.as_str())
             .filter(|value| !value.is_empty())
+    }
+
+    /// Every value given for a repeatable option, such as `--set`.
+    #[cfg_attr(not(feature = "realtime"), allow(dead_code))]
+    fn all(&self, name: &str) -> Vec<&str> {
+        self.entries
+            .iter()
+            .filter(|(key, value)| key == name && !value.is_empty())
+            .map(|(_, value)| value.as_str())
+            .collect()
     }
 
     fn flag(&self, name: &str) -> bool {

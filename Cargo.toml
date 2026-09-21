@@ -6,6 +6,18 @@ description = "Continuous-time simulator for patchable analog Eurorack neural mo
 license = "MIT"
 publish = false
 
+[features]
+default = []
+# Real hardware: device enumeration and a live audio stream, via cpal.
+# The simulator itself stays dependency free; this is the only thing that
+# reaches outside the crate.
+realtime = ["cpal"]
+# On Linux, talk to JACK or PipeWire's JACK server as well as ALSA.
+jack = ["realtime", "cpal/jack"]
+
+[dependencies]
+cpal = { version = "0.15", optional = true }
+
 [lib]
 name = "kaukonen"
 path = "src/lib.rs"
@@ -16,4 +28,4 @@ path = "src/bin/demo.rs"
 
 [[bin]]
 name = "kaukonen"
-path = "src/bin/kaukonen.rs"
+path = "src/bin/kaukonen/main.rs"

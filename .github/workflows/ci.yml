@@ -17,14 +17,24 @@ jobs:
       - name: Install Rust
         run: rustup component add rustfmt clippy
 
+      # cpal needs ALSA's headers to build the realtime feature.
+      - name: Install ALSA headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Format
         run: cargo fmt --all --check
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Clippy with hardware support
+        run: cargo clippy --all-targets --features realtime -- -D warnings
+
       - name: Test
         run: cargo test --all-targets
+
+      - name: Test with hardware support
+        run: cargo test --all-targets --features realtime
 
       # The shipped patches are part of the interface, so a change that breaks
       # one of them should fail here rather than in someone's rack.
