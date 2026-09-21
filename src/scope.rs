@@ -129,6 +129,17 @@ impl<'a> Scope<'a> {
             page.push_str("</section>\n");
         }
 
+        // With nothing recorded there is nothing to plot, and emitting the
+        // canvases anyway leaves a page full of empty boxes and NaN axes.
+        if self.recorder.times.is_empty() || self.recorder.names.is_empty() {
+            page.push_str(
+                "<section><h2>Traces</h2><p class=\"notes\">This run recorded no samples. \
+                 Add a <code>record</code> line to the patch, and check it ran for longer \
+                 than zero seconds.</p></section>\n</body></html>\n",
+            );
+            return page;
+        }
+
         page.push_str(BODY);
         page.push_str("<script>\nconst DATA = ");
         page.push_str(&self.data_json());
@@ -845,6 +856,16 @@ mod tests {
         assert!(min.len() <= MAX_POINTS + 1);
         assert_eq!(max.iter().copied().fold(f32::MIN, f32::max), 9.0);
         assert_eq!(min.iter().copied().fold(f32::MAX, f32::min), -9.0);
+    }
+
+    #[test]
+    fn an_empty_run_says_so_instead_of_drawing_nothing() {
+        let (recorder, _, _) = recorded("rate 1000\nseconds 0\nmodule n neuron\nrecord n.v\n");
+        assert!(recorder.times.is_empty());
+        let page = Scope::new("empty", &recorder).render();
+        assert!(page.contains("recorded no samples"));
+        assert!(!page.contains("<canvas"), "drew canvases with no data");
+        assert!(page.ends_with("</html>\n"));
     }
 
     #[test]

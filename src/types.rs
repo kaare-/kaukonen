@@ -78,7 +78,11 @@ impl SimConfig {
 }
 
 /// Hard clamp used as a last-resort rail protector.
+///
+/// A negative rail is meaningless, and passing one to `f32::clamp` with the
+/// bounds the wrong way round panics, so it is folded rather than trusted.
 pub fn clamp_rail(v: Volt, rail: Volt) -> Volt {
+    let rail = rail.abs();
     v.clamp(-rail, rail)
 }
 
@@ -153,6 +157,28 @@ impl Default for InstanceVariation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_negative_rail_folds_rather_than_panicking() {
+        // f32::clamp panics when handed its bounds the wrong way round, and a
+        // rail arrives from a patch file.
+        assert_eq!(clamp_rail(3.0, -10.0), 3.0);
+        assert_eq!(clamp_rail(30.0, -10.0), 10.0);
+        assert_eq!(clamp_rail(-30.0, -10.0), -10.0);
+        assert_eq!(clamp_rail(5.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn soft_clip_never_exceeds_its_ceiling() {
+        for v in [-100.0, -1.0, 0.0, 0.3, 1.0, 100.0] {
+            let out = soft_clip(v, 1.0, 0.7);
+            assert!(out.abs() <= 1.0, "{v} gave {out}");
+            assert_eq!(out.signum(), v.signum(), "{v} changed sign");
+        }
+        // Unity below the knee.
+        assert!((soft_clip(0.5, 1.0, 0.7) - 0.5).abs() < 1e-9);
+        assert_eq!(soft_clip(1.0, 0.0, 0.7), 0.0);
+    }
 
     #[test]
     fn identity_variation_is_zero() {

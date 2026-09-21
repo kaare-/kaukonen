@@ -3,6 +3,7 @@
 use super::{
     CableDecl, JackRef, KnobDecl, ModuleDecl, Patch, PatchConfig, PatchError, RecordDecl, Selector,
 };
+use crate::param::trim_float;
 
 /// Parse a `.kpatch` document.
 pub fn parse(text: &str) -> Result<Patch, PatchError> {
@@ -37,10 +38,16 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
                 }
                 patch.config.oversample = n as u32;
             }
-            "rail" => patch.config.rail = one_float(&rest, "rail", line)?,
+            "rail" => {
+                patch.config.rail = bounded(&rest, "rail", line, 0.1, 1000.0)?;
+            }
             "seed" => patch.config.seed = one_u64(&rest, "seed", line)?,
-            "mismatch" => patch.config.mismatch = one_float(&rest, "mismatch", line)?,
-            "seconds" => patch.config.seconds = one_float(&rest, "seconds", line)?,
+            "mismatch" => {
+                // Beyond 100% a tolerance stops being a tolerance: it can
+                // invert a component and turn a range inside out.
+                patch.config.mismatch = bounded(&rest, "mismatch", line, 0.0, 1.0)?;
+            }
+            "seconds" => patch.config.seconds = bounded(&rest, "seconds", line, 0.0, 86_400.0)?,
             "module" => patch.modules.push(parse_module(&rest, line)?),
             "knob" => patch.knobs.push(parse_knob(&rest, line)?),
             "patch" => patch.cables.push(parse_cable(&rest, line)?),
@@ -69,11 +76,33 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
             if dt <= 0.0 {
                 return Err(PatchError::at(line, "dt must be positive"));
             }
-            patch.config.sample_rate = 1.0 / (dt * patch.config.oversample as f32);
+            let rate = 1.0 / (dt * patch.config.oversample as f32);
+            if !(MIN_RATE..=MAX_RATE).contains(&rate) {
+                return Err(PatchError::at(
+                    line,
+                    format!(
+                        "dt {} with oversample {} means {} Hz frames, outside {}..{} Hz",
+                        trim_float(dt),
+                        patch.config.oversample,
+                        trim_float(rate),
+                        trim_float(MIN_RATE),
+                        trim_float(MAX_RATE)
+                    ),
+                ));
+            }
+            patch.config.sample_rate = rate;
         }
         (None, Some((hz, line))) => {
-            if hz <= 0.0 {
-                return Err(PatchError::at(line, "rate must be positive"));
+            if !(MIN_RATE..=MAX_RATE).contains(&hz) {
+                return Err(PatchError::at(
+                    line,
+                    format!(
+                        "rate is {}, which is outside {}..{} Hz",
+                        trim_float(hz),
+                        trim_float(MIN_RATE),
+                        trim_float(MAX_RATE)
+                    ),
+                ));
             }
             patch.config.sample_rate = hz;
         }
@@ -81,6 +110,11 @@ pub fn parse(text: &str) -> Result<Patch, PatchError> {
     }
     Ok(patch)
 }
+
+/// Slower than this and a patch is not really running; faster and a short run
+/// produces a trace large enough to exhaust the machine.
+const MIN_RATE: f32 = 0.001;
+const MAX_RATE: f32 = 1_000_000.0;
 
 fn strip_comment(line: &str) -> &str {
     match line.find('#') {
@@ -99,6 +133,30 @@ fn one_float(tokens: &[&str], what: &str, line: usize) -> Result<f32, PatchError
     tokens[0]
         .parse()
         .map_err(|_| PatchError::at(line, format!("{what}: '{}' is not a number", tokens[0])))
+}
+
+/// One value that has to fall inside a range, so a typo cannot produce a rack
+/// that crashes or a run that eats the machine.
+fn bounded(
+    tokens: &[&str],
+    what: &str,
+    line: usize,
+    min: f32,
+    max: f32,
+) -> Result<f32, PatchError> {
+    let value = one_float(tokens, what, line)?;
+    if !(min..=max).contains(&value) {
+        return Err(PatchError::at(
+            line,
+            format!(
+                "{what} is {}, which is outside {}..{}",
+                trim_float(value),
+                trim_float(min),
+                trim_float(max)
+            ),
+        ));
+    }
+    Ok(value)
 }
 
 fn one_u64(tokens: &[&str], what: &str, line: usize) -> Result<u64, PatchError> {
@@ -360,7 +418,7 @@ mod tests {
             ("module a rc1\nwobble 3\n", 2, "unknown directive"),
             ("dt\n", 1, "exactly one value"),
             ("dt banana\n", 1, "not a number"),
-            ("rate 0\n", 1, "must be positive"),
+            ("rate 0\n", 1, "outside"),
             ("module\n", 1, "takes a name and a kind"),
             ("module a rc1 bias\n", 1, "expected key=value"),
             ("module a rc1 bias=\n", 1, "has no value"),
@@ -381,6 +439,15 @@ mod tests {
                 "not an instance index",
             ),
             ("module a rc1\npatch a[0.out -> a.in\n", 2, "missing a ']'"),
+            // Values that used to be accepted here and crash much later.
+            ("rail -1\n", 1, "outside 0.1..1000"),
+            ("rail 0\n", 1, "outside"),
+            ("mismatch 3\n", 1, "outside 0..1"),
+            ("mismatch -1\n", 1, "outside"),
+            ("rate 1000000000\n", 1, "outside 0.001..1000000"),
+            ("rate 0.0000001\n", 1, "outside"),
+            ("dt 0.0000000001\n", 1, "outside"),
+            ("seconds -5\n", 1, "outside"),
         ];
         for (text, line, needle) in cases {
             let err = parse(text).expect_err(&format!("expected failure for {text:?}"));

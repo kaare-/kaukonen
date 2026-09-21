@@ -63,9 +63,11 @@ impl Tc3Params {
     pub fn vary(mut self, variation: InstanceVariation) -> Self {
         self.natural_decay = variation.scale_param(1, self.natural_decay).max(0.0);
         self.activity_gain = variation.scale_param(2, self.activity_gain);
-        // Even the end stops of an analog memory are a component tolerance.
-        self.w_max = variation.scale_param(3, self.w_max);
-        self.w_min = variation.scale_param(4, self.w_min);
+        // Even the end stops of an analog memory are a component tolerance —
+        // but an upper stop below the lower one is not a tolerance, it is a
+        // contradiction, and clamping between them would panic.
+        self.w_max = variation.scale_param(3, self.w_max).max(0.0);
+        self.w_min = variation.scale_param(4, self.w_min).min(0.0);
         self
     }
 }
@@ -544,6 +546,26 @@ mod tests {
             drifting.state.weights[0][0].abs() < drifting.params.w_max,
             "drift pinned the weight at its end stop"
         );
+    }
+
+    #[test]
+    fn heavy_tolerance_cannot_turn_the_end_stops_inside_out() {
+        // Tolerance wide enough to flip a sign used to put w_max below w_min,
+        // and clamping between them panics.
+        for seed in 0..64 {
+            let m = Tc3::instantiate(Tc3Params::default(), InstanceVariation::new(seed, 1.0));
+            assert!(
+                m.params.w_min <= m.params.w_max,
+                "seed {seed} gave w_min {} above w_max {}",
+                m.params.w_min,
+                m.params.w_max
+            );
+        }
+        let mut wild = Tc3::instantiate(Tc3Params::default(), InstanceVariation::new(7, 1.0));
+        for _ in 0..200 {
+            wild.step(&[1.0, 1.0, 1.0, 1.0, 0.0], 0.0005);
+        }
+        assert!(wild.state.weights[0][0].is_finite());
     }
 
     #[test]
