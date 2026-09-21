@@ -72,6 +72,10 @@ select them in a cable. The full grammar is in
 
 ## Run
 
+`main` is still the original demo-only tree (`cargo run --bin demo`). The
+CLI, patches and live playback are on
+`cursor/data-driven-patchbay-knobs-audio-c53a` until that PR merges.
+
 ```bash
 cargo test
 cargo run --bin demo                      # the shipped demonstration rack
@@ -94,7 +98,8 @@ xcode-select --install
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
-git clone https://github.com/kaare-/kaukonen.git
+# The instrument is on this branch until the PR lands on main.
+git clone -b cursor/data-driven-patchbay-knobs-audio-c53a https://github.com/kaare-/kaukonen.git
 cd kaukonen
 
 # Offline path — no extra packages, nothing talks to hardware

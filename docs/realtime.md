@@ -27,7 +27,7 @@ xcode-select --install                          # if this Mac has never compiled
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
-git clone https://github.com/kaare-/kaukonen.git
+git clone -b cursor/data-driven-patchbay-knobs-audio-c53a https://github.com/kaare-/kaukonen.git
 cd kaukonen
 cargo build --release --features realtime
 ./target/release/kaukonen devices
