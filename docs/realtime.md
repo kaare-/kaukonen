@@ -58,7 +58,9 @@ against.
 
 [`patches/live.kpatch`](../patches/live.kpatch) is written for this: the sound
 comes entirely from three excitable cells running at an audible rate, and its
-comments list the knobs worth turning first. Not every patch is playable —
+comments list the knobs worth turning first. [`patches/duet.kpatch`](../patches/duet.kpatch)
+is the larger session: those cells keep playing, and a microphone (Capture on
+the page) walks in and teaches the connectome. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
 
 ## Finding the interface
@@ -125,7 +127,8 @@ is the knobs — sliders honour each taper, a bank card sets every instance,
 gain / mute / quit sit at the top, and the peak meter is the same number
 the status line prints. Under that, Capture picks a microphone and
 channel and shows the incoming level. The patch needs an `audioin`
-(`listen.kpatch` has one; `live.kpatch` does not). Sound still leaves
+(`listen.kpatch` and `duet.kpatch` have one; `live.kpatch` does not).
+Sound still leaves
 through the interface; the browser never sees audio.
 
 `--port` picks the port, `--no-browser` skips opening one, `--no-web` is

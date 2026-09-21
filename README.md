@@ -150,6 +150,7 @@ rendered audio embedded so you can play it.
 | [`live.kpatch`](patches/live.kpatch) | Three cells at an audible rate are the whole sound source. Written for `play`, with the knobs worth turning listed in its comments. | yes |
 | [`voice.kpatch`](patches/voice.kpatch) | A percussive voice whose rhythm is RC-1 bursting. | yes |
 | [`listen.kpatch`](patches/listen.kpatch) | Recorded sound teaching a connectome, which colours it back. Needs `--in` or `--input`. | yes |
+| [`duet.kpatch`](patches/duet.kpatch) | A large rack with both voices: eight cells always playing, and a microphone that walks in and teaches the connectome. | yes |
 | [`demo.kpatch`](patches/demo.kpatch) | The original small recurrent rack: stimulus, TC-3, two neurons, two cells, feedback. | no |
 | [`chaos.kpatch`](patches/chaos.kpatch) | Two cells cross-coupled in their chaotic window. `probe` this one. | no |
 | [`bank64.kpatch`](patches/bank64.kpatch) | Sixty-four mismatched cells weakly coupled through a changing connectome. | no |
@@ -187,7 +188,7 @@ cargo build --release --features realtime
 `play` opens a control page on loopback and the same console as before.
 Every knob is a slider; a bank name still sets every instance. Capture
 picks a microphone, a channel, and shows its level — the patch needs an
-`audioin` (`listen.kpatch` has one; `live.kpatch` does not).
+`audioin` (`listen.kpatch` and `duet.kpatch` have one; `live.kpatch` does not).
 
 ```
 > set filt.cutoff 4000

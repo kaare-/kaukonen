@@ -943,7 +943,7 @@ function renderInput(state) {
   if (inp.error) {
     hint.textContent = inp.error;
   } else if (!can) {
-    hint.textContent = 'this patch has no audioin, so a microphone has nowhere to go. listen.kpatch has one.';
+    hint.textContent = 'this patch has no audioin, so a microphone has nowhere to go. listen.kpatch and duet.kpatch have one.';
   } else if (!listed) {
     hint.textContent = 'open with play to pick a microphone. serve has no audio.';
   } else {

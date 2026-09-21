@@ -660,6 +660,24 @@ record cells[*].v brain.w00 brain.activity
     }
 
     #[test]
+    fn shipped_patches_build() {
+        for path in [
+            "patches/live.kpatch",
+            "patches/voice.kpatch",
+            "patches/listen.kpatch",
+            "patches/duet.kpatch",
+            "patches/demo.kpatch",
+            "patches/chaos.kpatch",
+            "patches/bank64.kpatch",
+        ] {
+            let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            parse(&text)
+                .and_then(|p| p.build())
+                .unwrap_or_else(|e| panic!("{path}: {e}"));
+        }
+    }
+
+    #[test]
     fn cross_product_connects_every_pair() {
         let built = parse("module a rc1[3]\nmodule b neuron[4]\npatch a[*].out -> b[*].in0\n")
             .unwrap()

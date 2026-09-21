@@ -459,4 +459,23 @@ mod tests {
             assert!(output.iter().all(|s| s.is_finite()));
         }
     }
+
+    #[test]
+    fn duet_makes_sound_without_a_microphone() {
+        let text = std::fs::read_to_string("patches/duet.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        assert!(stream.has_input(), "duet should take a microphone");
+        assert!(stream.has_output(), "duet should play");
+        let mut buffer = vec![0.0f32; 512 * 2];
+        let mut peak = 0.0f32;
+        for _ in 0..80 {
+            stream.process(&mut buffer, 2);
+            peak = buffer.iter().fold(peak, |m, s| m.max(s.abs()));
+        }
+        assert!(
+            peak > 0.01,
+            "the internal voice was silent without a mic: {peak}"
+        );
+        assert!(peak.is_finite());
+    }
 }
