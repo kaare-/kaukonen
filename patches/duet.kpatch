@@ -57,7 +57,7 @@ module cells    rc1[16]   preset=burst rate=180 noise=0.015 output_gain=2
 module pulse    rc1[4]    preset=burst rate=42 noise=0.02 output_gain=2.2
 module ring     rc1[8]    preset=burst rate=88 noise=0.018 output_gain=2
 module hops     mix[8]    a0=0.1 a1=0.08 a2=0.035 a3=0
-module circ     neuron[4] w0=0.55 w1=0.28 w2=0.22 leak=9 gain=3.1 response=0.7
+module circ     neuron[4] w0=0.4 w1=0.35 w2=0.25 bias=0.55 leak=12 gain=3.4 response=0.7
 module layer    neuron[4] w0=0.5 w1=0.28 w2=0.3 w3=0.22 leak=10 gain=3.2 response=0.7
 module hear     neuron    w0=0.45 w1=0.35 leak=14 gain=3 response=0.7
 module feel     neuron    w0=0.4 w1=0.3 bias=0.1 leak=9 gain=3.5 response=0.65
