@@ -6,6 +6,7 @@
 //! here is a conventional analog building block with no plasticity, no
 //! excitability, and nothing to discover.
 
+pub mod comp;
 pub mod env;
 pub mod mix;
 pub mod noise;
@@ -14,6 +15,7 @@ pub mod vca;
 pub mod vcf;
 pub mod vco;
 
+pub use comp::Comp;
 pub use env::Env;
 pub use mix::Mix;
 pub use noise::Noise;

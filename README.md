@@ -27,10 +27,10 @@ Three module kinds do the interesting work.
   inputs, and an ACTIVITY output reporting how fast its own memory is moving,
   so plasticity becomes a signal you can patch.
 
-Around them is a **utility rack** — `vco`, `vcf`, `svf`, `vca`, `mix`, `env`,
-`noise` and a test `source` — plus `audioin` and `audioout`. These are ordinary
-analog building blocks with nothing to discover; they exist so the neural
-modules can be heard, scaled, gated and mixed.
+Around them is a **utility rack** — `vco`, `vcf`, `svf`, `comp`, `vca`, `mix`,
+`env`, `noise` and a test `source` — plus `audioin` and `audioout`. These are
+ordinary analog building blocks with nothing to discover; they exist so the
+neural modules can be heard, scaled, gated and mixed.
 
 Full knob reference: [`docs/modules.md`](docs/modules.md), or run
 `kaukonen modules`.
@@ -151,7 +151,7 @@ rendered audio embedded so you can play it.
 | [`voice.kpatch`](patches/voice.kpatch) | A percussive voice whose rhythm is RC-1 bursting. | yes |
 | [`listen.kpatch`](patches/listen.kpatch) | Recorded sound teaching a connectome, which colours it back. Needs `--in` or `--input`. | yes |
 | [`duet.kpatch`](patches/duet.kpatch) | A large dual-voice rack (sixteen audible cells, a pulse bank, an eight-cell ring, two memories, three filters) with a patch map on the live page. The microphone envelope steers the banks and the ring; the voice itself never reaches the speakers. | yes |
-| [`weather.kpatch`](patches/weather.kpatch) | A climate that is often quiet: drifting sky cells open a rain bank, a ring, and a chaotic oscillating pair, then shut the amplifiers again. Fast RC-1 clocks, neuron gates and a third memory granulate the weather into short resonant grains. Grain clouds duck the room, rain ducks the pair, and sift readings write back into the sky and the cells they came from. A wide CV bandpass at the end walks with the climate. Microphone envelope stirs the sky, not the speakers. | yes |
+| [`weather.kpatch`](patches/weather.kpatch) | A climate that is often quiet: drifting sky cells open a rain bank, a ring, and a chaotic oscillating pair, then shut the amplifiers again. Fast RC-1 clocks, neuron gates and a third memory granulate the weather into short resonant grains. A limiter and a three-way SVF split the microphone into low, mid and high that steer different parts of the rack; a tunable compressor sits on the output. The voice itself never reaches the speakers. | yes |
 | [`demo.kpatch`](patches/demo.kpatch) | The original small recurrent rack: stimulus, TC-3, two neurons, two cells, feedback. | no |
 | [`chaos.kpatch`](patches/chaos.kpatch) | Two cells cross-coupled in their chaotic window. `probe` this one. | no |
 | [`bank64.kpatch`](patches/bank64.kpatch) | Sixty-four mismatched cells weakly coupled through a changing connectome. | no |

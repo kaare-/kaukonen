@@ -9,22 +9,23 @@ const OUT_JACKS: &[&str] = &["out", "inv"];
 const STATE_FIELDS: &[&str] = &["out", "falling"];
 
 /// How the gate is interpreted.
-pub const MODES: &[&str] = &["ad", "ar", "slew"];
+pub const MODES: &[&str] = &["ad", "ar", "slew", "follow"];
 
 const PARAMS: &[ParamSpec] = params! {
     "attack", Unit::Seconds, 0.0002 ..= 20.0, 0.01, Log, "time to rise";
     "decay", Unit::Seconds, 0.0002 ..= 60.0, 0.3, Log, "time to fall";
-    "mode", Unit::Enum(MODES), 0.0 ..= 2.0, 0.0, Linear, "ad fires on an edge, ar follows the gate, slew smooths it";
+    "mode", Unit::Enum(MODES), 0.0 ..= 3.0, 0.0, Linear, "ad fires on an edge, ar follows the gate, slew smooths it, follow tracks |gate|";
     "threshold", Unit::Volt, 0.01 ..= 10.0, 1.0, Linear, "gate voltage that counts as high";
     "level", Unit::Volt, 0.0 ..= 10.0, 5.0, Linear, "output amplitude";
 };
 
-/// Three shapes of the same circuit.
+/// Four shapes of the same circuit.
 ///
 /// `ad` fires a full rise and fall from one edge, which is what turns an RC-1
 /// burst into a percussive envelope. `ar` holds while the gate is high. `slew`
 /// simply rate-limits whatever arrives, which also makes it the smoother for a
-/// noisy control voltage.
+/// noisy control voltage. `follow` tracks the absolute value of the input, so
+/// a filtered microphone becomes a band envelope.
 #[derive(Clone, Debug)]
 pub struct Env {
     pub attack: f32,
@@ -130,6 +131,17 @@ impl AnalogModule for Env {
             // Rate-limited follower of the input itself.
             2 => {
                 let target = (gate / self.level.max(1e-6)).clamp(-1.0, 1.0);
+                self.falling = target < self.value;
+                let time = if target > self.value {
+                    self.attack
+                } else {
+                    self.decay
+                };
+                self.value = Self::ramp(self.value, target, time, dt);
+            }
+            // Envelope follower: the absolute value of the input, slewed.
+            3 => {
+                let target = (gate.abs() / self.level.max(1e-6)).clamp(0.0, 1.0);
                 self.falling = target < self.value;
                 let time = if target > self.value {
                     self.attack
@@ -272,6 +284,24 @@ mod tests {
         let mut env = env(1.0, 0.001, 0.1);
         let out = env.step(&[5.0], DT);
         assert!((out[0] + out[1]).abs() < 1e-6);
+    }
+
+    #[test]
+    fn follow_mode_tracks_the_absolute_value() {
+        let mut env = env(3.0, 0.005, 0.02);
+        env.set_param("level", 5.0).unwrap();
+        let pos = trace(&mut env, 4.0, 0.05);
+        let up = *pos.last().unwrap();
+        assert!(up > 3.5, "follow missed a +4 V tone: {up}");
+        let neg = trace(&mut env, -4.0, 0.05);
+        let down = *neg.last().unwrap();
+        assert!(down > 3.5, "follow treated −4 V as closed: {down}");
+        let rest = trace(&mut env, 0.0, 0.08);
+        assert!(
+            rest.last().unwrap().abs() < 0.4,
+            "follow never fell: {}",
+            rest.last().unwrap()
+        );
     }
 
     #[test]

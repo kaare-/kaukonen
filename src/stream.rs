@@ -854,6 +854,63 @@ mod tests {
         );
     }
 
+    fn drive_tone(stream: &mut Stream, hz: f32, amp: f32, blocks: usize) {
+        let rate = stream.sample_rate();
+        let block = 256;
+        let mut phase = 0.0f32;
+        let mut input = vec![0.0f32; block * 2];
+        let mut out = vec![0.0f32; block * 2];
+        for _ in 0..blocks {
+            for frame in 0..block {
+                phase = (phase + hz / rate).fract();
+                let sample = amp * (phase * std::f32::consts::TAU).sin();
+                input[frame * 2] = sample;
+                input[frame * 2 + 1] = sample;
+            }
+            stream.process_duplex(&input, &mut out, 2);
+        }
+    }
+
+    #[test]
+    fn weather_mic_bands_steer_different_places() {
+        // A low tone should open the low envelope more than the high one;
+        // a sibilant should do the opposite. Those envelopes are how the
+        // three bands reach different parts of the climate.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let names = ["micenv[0].out", "micenv[2].out"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut low = Stream::new(built(&text));
+        drive_tone(&mut low, 180.0, 0.55, 80);
+        let low_env = low.engine_mut().snapshot_sample(&names);
+        let mut high = Stream::new(built(&text));
+        drive_tone(&mut high, 3500.0, 0.55, 80);
+        let high_env = high.engine_mut().snapshot_sample(&names);
+        assert!(
+            low_env[0] > low_env[1] + 0.15,
+            "a low tone did not prefer the low band: {low_env:?}"
+        );
+        assert!(
+            high_env[1] > high_env[0] + 0.15,
+            "a high tone did not prefer the high band: {high_env:?}"
+        );
+    }
+
+    #[test]
+    fn weather_mic_limiter_tames_a_spike() {
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        drive_tone(&mut stream, 400.0, 0.95, 40);
+        let names = ["miclim.gr", "miclim.env"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let now = stream.engine_mut().snapshot_sample(&names);
+        assert!(now[0] > 0.4, "the limiter never closed: gr {}", now[0]);
+        assert!(now[1] > 1.1, "the detector never saw the spike: {}", now[1]);
+    }
+
     fn pearson(a: &[f32], b: &[f32]) -> f32 {
         let n = a.len() as f32;
         if n == 0.0 {

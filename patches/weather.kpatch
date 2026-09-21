@@ -27,9 +27,11 @@
 # large window, not another resonant ping, and a little of the dry mix
 # stays so the climate body is still there.
 #
-# The microphone never reaches the converter. Its envelope stirs the sky,
-# leans on the ring hops and the grit clocks, and teaches the memories.
-# Speech makes the weather turn over faster; it is not mixed in as a voice.
+# The microphone is limited, then split by a state-variable cell into
+# low, mid and high. Those bands never reach the converter: their
+# envelopes steer different parts of the climate. Low turns the sky,
+# mid leans on the rain and the ring, high tickles the grit clocks.
+# A tunable compressor sits on the stereo mix after the output band.
 #
 #   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
 #   (256 is often fine; raise --block if `late` climbs)
@@ -67,6 +69,11 @@
 #   set band.cutoff 600       # centre of the final window; 400 is dark, 1600 is thin
 #   set band.q 0.45           # 0.4 is a large band, 2 is a wah
 #   set bandcv.a0 0.28        # how far sand walks the band
+#   set split.cutoff 700      # mic crossover; lower puts more speech into the sky
+#   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
+#   set outcomp.threshold 1.6 # output compressor
+#   set outcomp.ratio 6       # 2 is gentle, 12 is a limiter
+#   set outcomp.attack 0.004  # 0.001 is smash, 0.04 is level
 #   set adc.gain 2.0          # how hard speech stirs the sky
 #   gain 0.5
 
@@ -77,6 +84,9 @@ seed 23
 mismatch 0.06
 
 module adc      audioin   gain=1.5 env_rate=10
+module miclim   comp      threshold=1.05 ratio=20 attack=0.0004 release=0.08 knee=0.15 makeup=1 mix=1
+module split    svf       cutoff=850 q=0.52 drive=1.1 level=1.0
+module micenv   env[3]    mode=follow attack=0.012 decay=0.16 level=5
 module sky      rc1[4]    preset=burst rate=7 noise=0.035 drift=0.14 bias=2.05 output_gain=2.2
 module rain     rc1[6]    preset=burst rate=170 noise=0.02 bias=1.45 output_gain=2
 module ring     rc1[4]    preset=burst rate=64 noise=0.02 bias=1.7 output_gain=2
@@ -139,7 +149,8 @@ module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
 module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
 module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
 module end      mix[2]    a0=0.48 a1=0.72 level=0.95
-module dac      audioout  rate=48000 level=0.34
+module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.05 mix=1
+module dac      audioout  rate=48000 level=0.30
 
 knob flake[0].decay 0.008
 knob flake[1].decay 0.012
@@ -172,7 +183,7 @@ patch rain[5].out -> rainbox2.in2
 patch rainbox.out  -> shower.in0
 patch rainbox2.out -> shower.in1
 patch gust.out     -> fan.in0
-patch adc.env      -> fan.in1
+patch micenv[1].out -> fan.in1
 patch brain.a      -> fan.in2
 patch cloud.inv    -> fan.in3
 patch fan.out      -> rain[*].in
@@ -185,7 +196,7 @@ patch ring[1].out -> hops[2].in0
 patch ring[2].out -> hops[3].in0
 patch ring[3].out -> hops[0].in0
 patch gust.out    -> hops[*].in1
-patch adc.env     -> hops[*].in2
+patch micenv[1].out -> hops[*].in2
 patch lean.out    -> hops[*].in3
 patch hops[i].out -> ring[i].in
 patch ring[0].out -> ringbox.in0
@@ -202,7 +213,7 @@ patch b.out     -> cross.in1
 patch cross.out -> b.in
 patch cross.inv -> a.in
 patch gust.out    -> tug.in0
-patch adc.env     -> tug.in1
+patch micenv[1].out -> tug.in1
 patch shower.out  -> tug.in2
 patch sand.b      -> tug.in3
 patch tug.out      -> a.in
@@ -216,7 +227,7 @@ patch recoil.inv   -> b.in
 
 # A tone that only exists for the length of a rain tick.
 patch rain[2].out -> pace.in0
-patch adc.env     -> pace.in1
+patch micenv[1].out -> pace.in1
 patch after.out   -> pace.in2
 patch sieve.out   -> pace.in3
 patch pace.out    -> osc.fm
@@ -235,7 +246,7 @@ patch sky[0].out  -> layer[2].in0
 patch rain[1].out -> layer[0].in1
 patch rain[3].out -> layer[1].in1
 patch rain[5].out -> layer[2].in1
-patch adc.env     -> layer[*].in2
+patch micenv[1].out -> layer[*].in2
 patch layer[0].out -> cortex.a
 patch layer[1].out -> cortex.b
 patch layer[2].out -> cortex.c
@@ -244,15 +255,15 @@ patch cortex.activity -> cortex.learn
 patch decay.out    -> cortex.forget
 
 # BCM watches a compressed mic, the weather, and a read of the rain.
-patch adc.out      -> hear.in0
-patch adc.env      -> hear.in1
+patch split.bp     -> hear.in0
+patch micenv[1].out -> hear.in1
 patch shower.out   -> see.in0
 patch cortex.activity -> see.in1
 patch hear.out     -> brain.a
-patch adc.env      -> sense.in0
+patch micenv[1].out -> sense.in0
 patch sense.out    -> brain.b
 patch gust.out     -> brain.c
-patch adc.env      -> teach.in0
+patch micenv[1].out -> teach.in0
 patch brain.activity -> teach.in1
 patch sieve.out    -> teach.in2
 patch teach.out    -> brain.learn
@@ -263,7 +274,13 @@ patch grain.out    -> cortex.learn
 # instead of sitting on the speakers. Grain readings write back into
 # each sky cell; the sieve and the afterglow tilt two of them opposite
 # ways so the climate does not repeat.
-patch adc.env   -> sky[*].in
+patch adc.env        -> sky[*].in
+patch micenv[0].out  -> sky[*].in
+patch adc.out        -> miclim.in
+patch miclim.out     -> split.in
+patch split.lp       -> micenv[0].gate
+patch split.bp       -> micenv[1].gate
+patch split.hp       -> micenv[2].gate
 patch squall.out -> after.gate
 patch sieve.out     -> lean.in0
 patch layer[1].out  -> lean.in1
@@ -295,6 +312,7 @@ patch echo[i].out   -> sky[i].in
 patch gust.out         -> swell.in0
 patch squall.out       -> swell.in1
 patch adc.env          -> swell.in2
+patch micenv[0].out    -> swell.in2
 patch swell.out        -> roomcv.in0
 patch cloud.out        -> roomcv.in1
 patch shower.out       -> roomcv.in2
@@ -307,7 +325,7 @@ patch cortex.b         -> paircv.in3
 patch paircv.out       -> pairamp.cv
 patch brain.a          -> lift.in0
 patch rain[1].out      -> lift.in1
-patch adc.env          -> lift.in2
+patch micenv[0].out    -> lift.in2
 patch sand.b           -> lift.in3
 patch lift.out         -> room.cutoff_cv
 patch cortex.a         -> air.cutoff_cv
@@ -329,7 +347,7 @@ patch open.out         -> air.cutoff_cv
 # and the dust filter's corner. The squall ducks the grains so they
 # take the afterglow. Nothing from adc.out reaches dust.
 patch gust.out     -> stir.in0
-patch adc.env      -> stir.in1
+patch micenv[2].out -> stir.in1
 patch sand.a       -> stir.in2
 patch sieve.out    -> stir.in3
 patch stir.out     -> poke[*].in0
@@ -419,7 +437,9 @@ patch left.out     -> end[0].in0
 patch band[0].bp   -> end[0].in1
 patch right.out    -> end[1].in0
 patch band[1].bp   -> end[1].in1
-patch end[0].out   -> dac.left
-patch end[1].out   -> dac.right
+patch end[0].out   -> outcomp[0].in
+patch end[1].out   -> outcomp[1].in
+patch outcomp[0].out -> dac.left
+patch outcomp[1].out -> dac.right
 
-record adc.env sky[0].v sky[1].v sky[3].v rain[0].v grit[0].v flake[0].out cloud.out after.out a.v echo[0].out write[0].out recoil.out sieve.out sand.activity dust.cutoff band[0].cutoff band[0].q roomamp.gain pairamp.gain dustamp.gain
+record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out band[0].cutoff roomamp.gain pairamp.gain dustamp.gain

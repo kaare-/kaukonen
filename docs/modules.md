@@ -156,6 +156,22 @@ Presets: subthreshold, pulse, tonic, burst.
 | `drive` | 0.1..10 | `1` | gain into the integrator pair |
 | `level` | 0..4 | `1` | output scale |
 
+## `comp`
+
+- inputs: `in`
+- outputs: `out`, `gr`, `env`
+- states: `gain`, `env`, `gr`
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `threshold` | 0.2..8 V | `2.5 V` | level where gain reduction starts |
+| `ratio` | 1..20 | `4` | compression above the threshold; 20 is a limiter |
+| `attack` | 0.0002..0.5 s | `0.005 s` | how fast the detector follows a rising edge |
+| `release` | 0.01..3 s | `0.15 s` | how fast the detector falls |
+| `knee` | 0..4 V | `0.4 V` | soft knee width; zero is a hard corner |
+| `makeup` | 0..4 | `1` | gain after reduction |
+| `mix` | 0..1 | `1` | dry/wet; 1 is fully compressed |
+
 ## `vca`
 
 - inputs: `in`, `cv`
@@ -194,7 +210,7 @@ Presets: subthreshold, pulse, tonic, burst.
 | --- | --- | --- | --- |
 | `attack` | 0.0002..20 s | `0.01 s` | time to rise |
 | `decay` | 0.0002..60 s | `0.3 s` | time to fall |
-| `mode` | ad\|ar\|slew | `ad` | ad fires on an edge, ar follows the gate, slew smooths it |
+| `mode` | ad\|ar\|slew\|follow | `ad` | ad fires on an edge, ar follows the gate, slew smooths it, follow tracks |gate| |
 | `threshold` | 0.01..10 V | `1 V` | gate voltage that counts as high |
 | `level` | 0..10 V | `5 V` | output amplitude |
 
