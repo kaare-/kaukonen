@@ -1334,6 +1334,9 @@ mod tests {
         assert!(s.map.nodes.len() >= 40, "nodes={}", s.map.nodes.len());
         assert!(s.map.nodes.iter().any(|n| n.bank == "sky"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "rain"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "grit"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "sift"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "sand"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
     }

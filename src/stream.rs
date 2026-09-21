@@ -627,16 +627,45 @@ mod tests {
         );
         assert!(hot >= 2, "never burst: {hot} hot windows, rms={rms:?}");
         assert!(peak > 0.05, "the squalls were too small: {peak}");
+        assert!(
+            pair_peak > 0.8,
+            "the oscillating pair never left rest: {pair_peak}"
+        );
+    }
 
-        let names = ["a.v", "b.v"]
+    #[test]
+    fn weather_grains_tick_finer_than_the_sky() {
+        // The granulator is RC-1 clocks into short neuron-gated windows.
+        // Those clocks have to fire more often than the climate, or the
+        // dust filter is just another squall VCA.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let names = ["sky[0].v", "grit[0].v", "dustamp.gain", "roomamp.gain"]
             .into_iter()
             .map(String::from)
             .collect::<Vec<_>>();
-        let pair = stream.engine_mut().snapshot_sample(&names);
+        let mut sky_rises = 0;
+        let mut grit_rises = 0;
+        let mut last = [0.0f32; 4];
+        let mut buffer = vec![0.0f32; 512 * 2];
+        let mut grain_peak = 0.0f32;
+        for _ in 0..200 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            if last[0] < 0.8 && now[0] >= 0.8 {
+                sky_rises += 1;
+            }
+            if last[1] < 0.8 && now[1] >= 0.8 {
+                grit_rises += 1;
+            }
+            grain_peak = grain_peak.max(now[2].abs());
+            last = [now[0], now[1], now[2], now[3]];
+        }
         assert!(
-            pair.iter().any(|v| v.abs() > 0.2),
-            "the oscillating pair never moved: {pair:?}"
+            grit_rises > sky_rises,
+            "grains no finer than the sky: grit {grit_rises} sky {sky_rises}"
         );
+        assert!(grain_peak > 0.05, "the dust VCA never opened: {grain_peak}");
     }
 
     #[test]
