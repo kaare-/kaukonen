@@ -152,6 +152,32 @@ pub fn patch_has_audioin(built: &BuiltPatch) -> bool {
     (0..built.network.len()).any(|i| built.network.get(ModuleId(i)).kind_name() == "audioin")
 }
 
+/// Knobs a weather-like rack should keep at the top even without a `desk` line.
+fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
+    const WANTED: &[(&str, &str)] = &[
+        ("split", "cutoff"),
+        ("split", "q"),
+        ("band", "cutoff"),
+        ("band", "q"),
+        ("miclim", "threshold"),
+        ("miclim", "ratio"),
+        ("outcomp", "threshold"),
+        ("outcomp", "ratio"),
+        ("outcomp", "attack"),
+        ("outcomp", "release"),
+    ];
+    WANTED
+        .iter()
+        .copied()
+        .filter(|(bank, knob)| {
+            modules.iter().any(|m| {
+                m.name == *bank && m.knobs.iter().any(|k| k.spec.name == *knob)
+            })
+        })
+        .map(|(bank, knob)| (bank.to_string(), knob.to_string()))
+        .collect()
+}
+
 /// One declared module, or a whole bank under a single set of sliders.
 pub struct Bank {
     pub name: String,
@@ -211,8 +237,12 @@ impl Surface {
                 ..InputView::default()
             },
             map: Map::of(&built.network, &Schedule::build(&built.network)),
+            desk: if built.desk.is_empty() {
+                fallback_desk(&modules)
+            } else {
+                built.desk.clone()
+            },
             modules,
-            desk: built.desk.clone(),
         }
     }
 
@@ -845,12 +875,19 @@ button.danger { border-color: #7f1d1d; color: #fecaca; }
             text-align: right; }
 .row .doc { grid-column: 1 / -1; font-size: 11px; color: #6b7280; margin: -4px 0 4px; }
 .hint { color: #6b7280; font-size: 12px; margin-top: 18px; }
-.deskwrap { background: #12151a; border: 1px solid #2a3a32; border-radius: 8px;
-            padding: 10px 12px 8px; margin-bottom: 14px; }
-.deskwrap header { display: flex; justify-content: space-between; align-items: baseline;
-                   margin-bottom: 8px; }
-.deskwrap .grid { margin: 0; }
-.deskwrap .card { border-color: #2a3a32; }
+.topsticky { position: sticky; top: 0; z-index: 8; background: #0d0f12;
+             padding-bottom: 4px; }
+.deskwrap { margin-bottom: 10px; }
+.deskrow { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+           background: #12151a; border: 1px solid #2a3a32; border-radius: 8px;
+           padding: 8px 12px; margin-bottom: 8px; }
+.deskrow .who { font-size: 11px; font-weight: 600; color: #6ee7b7; min-width: 7.8em;
+                text-transform: uppercase; letter-spacing: .06em; }
+.deskrow .cell { display: flex; align-items: center; gap: 8px; }
+.deskrow label { font-size: 12px; color: #d1d5db; min-width: 4.6em; }
+.deskrow input[type=range] { width: 130px; accent-color: #34d399; }
+.deskrow .val { font-variant-numeric: tabular-nums; font-size: 12px; color: #93c5fd;
+                min-width: 4.6em; }
 .mapwrap { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
            padding: 10px 12px 8px; margin-bottom: 18px; }
 .mapwrap header { display: flex; justify-content: space-between; align-items: baseline;
@@ -882,6 +919,7 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
     <div class="stat">late <b id="late">0</b></div>
   </div>
 </header>
+<div class="topsticky">
 <div class="transport">
   <label for="gain">gain</label>
   <input id="gain" type="range" min="0" max="1" step="0.001" value="0.3" style="width:220px">
@@ -901,12 +939,8 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
 </div>
 <p class="note" id="inputhint"></p>
 <div class="deskwrap" id="deskwrap" hidden>
-  <header>
-    <h2>desk</h2>
-    <span class="stat" id="deskstat"></span>
-  </header>
-  <div class="grid" id="desk"></div>
-  <p class="note">These stay at the top. The rest of the rack is below the map.</p>
+  <div id="desk"></div>
+</div>
 </div>
 <div class="mapwrap" id="mapwrap" hidden>
   <header>
@@ -971,9 +1005,9 @@ function render(state) {
   if (state.late != null) $('late').textContent = state.late;
   renderInput(state);
   if (state.map && !$('mapscroll').dataset.drawn) drawMap(state.map);
+  if (!$('desk').dataset.drawn) renderDesk(state);
   const grid = $('grid');
   if (grid.childElementCount === 0) {
-    renderDesk(state);
     state.modules.forEach(mod => grid.appendChild(card(mod)));
   } else {
     state.modules.forEach(mod => {
@@ -992,15 +1026,37 @@ function render(state) {
   }
 }
 
+const DESK_LABEL = {
+  split: 'mic split', band: 'output band', miclim: 'limiter', outcomp: 'compressor'
+};
+const DESK_FALLBACK = [
+  ['split', 'cutoff'], ['split', 'q'],
+  ['band', 'cutoff'], ['band', 'q'],
+  ['miclim', 'threshold'], ['miclim', 'ratio'],
+  ['outcomp', 'threshold'], ['outcomp', 'ratio'],
+  ['outcomp', 'attack'], ['outcomp', 'release']
+];
+
+function deskItems(state) {
+  if (state.desk && state.desk.length) return state.desk;
+  return DESK_FALLBACK
+    .filter(([mod, knob]) => {
+      const m = (state.modules || []).find(x => x.name === mod);
+      return m && m.knobs.some(k => k.name === knob);
+    })
+    .map(([module, knob]) => ({ module, knob }));
+}
+
 function renderDesk(state) {
   const wrap = $('deskwrap');
   const host = $('desk');
-  const items = state.desk || [];
+  const items = deskItems(state);
   if (!items.length) {
     wrap.hidden = true;
     return;
   }
   wrap.hidden = false;
+  host.innerHTML = '';
   const groups = [];
   items.forEach(item => {
     let g = groups.find(x => x.name === item.module);
@@ -1013,12 +1069,49 @@ function renderDesk(state) {
     const knob = g.mod.knobs.find(k => k.name === item.knob);
     if (knob && !g.knobs.some(k => k.name === knob.name)) g.knobs.push(knob);
   });
-  $('deskstat').textContent = groups.length + ' · ' +
-    items.length + ' knob' + (items.length === 1 ? '' : 's');
   groups.forEach(g => {
-    host.appendChild(card({ name: g.mod.name, kind: g.mod.kind,
-      count: g.mod.count, knobs: g.knobs }, 'desk-'));
+    const row = document.createElement('div');
+    row.className = 'deskrow';
+    row.id = 'desk-' + g.name;
+    const who = document.createElement('div');
+    who.className = 'who';
+    who.textContent = DESK_LABEL[g.name] || g.name;
+    row.appendChild(who);
+    g.knobs.forEach(k => {
+      const id = g.name + '.' + k.name;
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const lab = document.createElement('label');
+      lab.textContent = k.name;
+      lab.title = k.doc;
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '1';
+      input.step = '0.001';
+      input.value = toNorm(k, k.value);
+      input.dataset.id = id;
+      input.title = k.doc;
+      const val = document.createElement('span');
+      val.className = 'val';
+      val.dataset.read = id;
+      val.textContent = fmt(k, k.value);
+      const send = () => {
+        const raw = fromNorm(k, Number(input.value));
+        val.textContent = fmt(k, raw);
+        post('/api/set', { module: g.name, knob: k.name, value: raw });
+      };
+      input.addEventListener('pointerdown', () => dragging.add(id));
+      input.addEventListener('pointerup', () => dragging.delete(id));
+      input.addEventListener('input', send);
+      cell.appendChild(lab);
+      cell.appendChild(input);
+      cell.appendChild(val);
+      row.appendChild(cell);
+    });
+    host.appendChild(row);
   });
+  host.dataset.drawn = '1';
 }
 
 function renderInput(state) {
@@ -1420,6 +1513,44 @@ mod tests {
     }
 
     #[test]
+    fn weather_keeps_the_tone_strip_without_a_desk_line() {
+        let text = std::fs::read_to_string("patches/weather.kpatch")
+            .unwrap()
+            .lines()
+            .filter(|l| !l.starts_with("desk "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let built = patch::parse(&text).unwrap().build().unwrap();
+        assert!(built.desk.is_empty());
+        let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
+        assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
+        assert!(s.desk.iter().any(|(m, k)| m == "miclim" && k == "threshold"));
+        assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
+    }
+
+    #[test]
+    fn a_loopback_weather_page_serves_the_tone_strip() {
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = patch::parse(&text).unwrap().build().unwrap();
+        let surface = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
+        let panel = start(surface, Arc::new(Silent), 0).expect("bind");
+        let base = url(panel.addr);
+        let page = get(&format!("{base}/"));
+        assert!(page.contains("id=\"deskwrap\""), "{page}");
+        assert!(page.contains("mic split"), "{page}");
+        let state = get(&format!("{base}/api/state"));
+        assert!(state.contains("\"module\":\"split\""), "{state}");
+        assert!(state.contains("\"module\":\"outcomp\""), "{state}");
+        let response = post(
+            &format!("{base}/api/set"),
+            r#"{"module":"split","knob":"cutoff","value":700}"#,
+        );
+        assert!(response.contains("\"ok\":true"), "{response}");
+        panel.stop.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
     fn live_has_no_audioin_and_listen_does() {
         assert!(!live_surface().input.available);
         assert!(listen_surface().input.available);
@@ -1482,6 +1613,8 @@ mod tests {
         assert!(PAGE.contains("id=\"inpeak\""));
         assert!(PAGE.contains("id=\"mapwrap\""));
         assert!(PAGE.contains("id=\"deskwrap\""));
+        assert!(PAGE.contains("topsticky"));
+        assert!(PAGE.contains("mic split"));
         assert!(PAGE.contains("renderDesk"));
         assert!(PAGE.contains("drawMap"));
         assert!(PAGE.contains("focusBank"));

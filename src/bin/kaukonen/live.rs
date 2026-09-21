@@ -220,6 +220,30 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     let mut surface = args
         .web
         .then(|| Surface::from_built(args.source, &output.device_name, args.gain, &built));
+    if let Some(s) = surface.as_ref() {
+        if !s.desk.is_empty() {
+            let mut names = Vec::new();
+            for (module, _) in &s.desk {
+                if !names.iter().any(|n| n == module) {
+                    names.push(module.clone());
+                }
+            }
+            let pretty: Vec<&str> = names
+                .iter()
+                .map(|n| match n.as_str() {
+                    "split" => "mic split",
+                    "band" => "output band",
+                    "miclim" => "limiter",
+                    "outcomp" => "compressor",
+                    other => other,
+                })
+                .collect();
+            println!(
+                "desk     {} — under Capture on the page",
+                pretty.join(", ")
+            );
+        }
+    }
     let rack = Stream::new(built);
     let has_adc = rack.has_input();
     if !rack.has_output() {
