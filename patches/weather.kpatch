@@ -16,8 +16,11 @@
 # cloud ducks the room; rain ducks the pair so it sings in the holes;
 # the squall ducks the grains so they take the afterglow; each grit
 # clock listens to a different weather slice and is inhibited by its
-# neighbor flake. Memory and the afterglow tilt the sky and the ring,
-# so the next burst is not the last one played backwards.
+# neighbor flake. Later stages write back: sift readings echo into the
+# sky cell that produced them, kick the rain or ring they read, and
+# push the pair apart. A grain cloud also sidechains the grit clocks
+# and teaches the memories, so the next burst is not the last one
+# played backwards.
 #
 # The microphone never reaches the converter. Its envelope stirs the sky,
 # leans on the ring hops and the grit clocks, and teaches the memories.
@@ -52,6 +55,10 @@
 #   set dustcv.a1 -0.45       # squall ducks the grains; they fill the afterglow
 #   set poke.a1 0.16          # how much each grit clock hears its own slice
 #   set cloud.decay 0.6       # how long the grain cloud holds the duck
+#   set echo.a0 0.18          # how hard a grain reading writes back into the sky
+#   set write.a0 0.14         # how hard that reading kicks the cell it read
+#   set recoil.a1 -0.12       # grains push the pair apart
+#   set lean.a0 0.1           # how much the grain sieve tilts the climate
 #   set adc.gain 2.0          # how hard speech stirs the sky
 #   gain 0.5
 
@@ -70,9 +77,12 @@ module a        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=
 module b        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.12 rate=66 output_gain=2.2
 module grit     rc1[4]    preset=burst rate=420 noise=0.04 bias=1.42 output_gain=2.1
 module flake    env[4]    mode=ad attack=0.0008 decay=0.014 threshold=1.45 level=5
-module sift     neuron[4] w0=0.55 w1=0.7 w2=0.28 leak=36 gain=3.4 response=0.75
+module sift     neuron[4] w0=0.48 w1=0.85 w2=0.22 leak=12 gain=3.4 response=0.75
 module sand     tc3       rule=oja gamma=0.45 scaling=0.55 target_norm=1.05 activity_gain=0.35
 module poke     mix[4]    a0=1.0 a1=0.11 a2=0.07 a3=-0.08
+module echo     mix[4]    a0=0.055 a1=0.07 a2=0.10 a3=0.04
+module write    mix[4]    a0=0.05 a1=0.12 a2=0 a3=0 level=1.2
+module recoil   mix       a0=0.08 a1=-0.055 a2=0.045 a3=0.04
 module layer    neuron[3] w0=0.5 w1=0.3 w2=0.22 leak=10 gain=3.2 response=0.7
 module hear     neuron    w0=0.4 w1=0.35 leak=12 gain=3 response=0.7
 module see      neuron    w0=0.4 w1=0.3 leak=8 gain=3.2 response=0.7
@@ -85,23 +95,23 @@ module shower   mix       a0=0.55 a1=0.5 level=0.8
 module ringbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
 module bed      mix       a0=0.7 a1=0.4 level=0.85
 module cross    mix       a0=0.32 a1=-0.32 a2=0 a3=0
-module teach    mix       a0=0.3 a1=0.12 a2=0 a3=0
+module teach    mix       a0=0.3 a1=0.12 a2=0.1 a3=0
 module sense    mix       a0=0.2 a1=0 a2=0 a3=0
 module fan      mix       a0=0.14 a1=0.1 a2=0.03 a3=0.05
 module tug      mix       a0=0.08 a1=0.1 a2=0.06 a3=0.04
 module swell    mix       a0=0.5 a1=0.28 a2=0.35 a3=0 level=1.15
-module open     mix       a0=2 a1=0.35 a2=0 a3=0 level=3.5
+module open     mix       a0=2 a1=0.35 a2=-0.22 a3=0 level=3.5
 module lift     mix       a0=0.8 a1=0.35 a2=0.25 a3=0.18 offset=0.9 level=0.65
-module pace     mix       a0=0.4 a1=0.15 a2=0.18 a3=0
-module stir     mix       a0=0.11 a1=0.08 a2=0.035 a3=0 offset=0.03
+module pace     mix       a0=0.4 a1=0.15 a2=0.18 a3=0.12
+module stir     mix       a0=0.11 a1=0.08 a2=0.035 a3=-0.04 offset=0.03
 module grain    mix       a0=0.7 a1=0.7 a2=0.7 a3=0.7 level=0.85
 module sieve    mix       a0=0.55 a1=0.5 a2=0.45 a3=0.4 level=0.8
 module tint     mix       a0=0.25 a1=0.16 a2=0.18 a3=0.12 offset=0.55 level=0.55
-module roomcv   mix       a0=1.0 a1=-0.28 a2=-0.12 a3=0.12 level=1.0
-module paircv   mix       a0=0.9 a1=-0.24 a2=0.2 a3=0.12 level=1.0
+module roomcv   mix       a0=1.2 a1=-0.22 a2=-0.10 a3=0.14 level=1.0
+module paircv   mix       a0=1.0 a1=-0.22 a2=0.2 a3=0.12 level=1.0
 module dustcv   mix       a0=1.0 a1=-0.26 a2=0.12 a3=-0.14 level=1.0
-module tonecv   mix       a0=1.0 a1=-0.42 a2=0.14 a3=0 level=1.0
-module lean     mix       a0=0.045 a1=0.03 a2=0.025 a3=0
+module tonecv   mix       a0=1.0 a1=-0.42 a2=0.14 a3=-0.2 level=1.0
+module lean     mix       a0=0.07 a1=0.05 a2=0.04 a3=0.035
 module left     mix       a0=1.0 a1=0.45 a2=0.22 a3=0.28 level=0.9
 module right    mix       a0=0.75 a1=0.7 a2=0.18 a3=0.34 level=0.9
 module decay    source    shape=dc volts=0.14
@@ -184,19 +194,27 @@ patch gust.out    -> tug.in0
 patch adc.env     -> tug.in1
 patch shower.out  -> tug.in2
 patch sand.b      -> tug.in3
-patch tug.out     -> a.in
-patch tug.out     -> b.in
+patch tug.out      -> a.in
+patch tug.out      -> b.in
+patch sift[2].out  -> recoil.in0
+patch grain.out    -> recoil.in1
+patch cortex.b     -> recoil.in2
+patch layer[2].out -> recoil.in3
+patch recoil.out   -> a.in
+patch recoil.inv   -> b.in
 
 # A tone that only exists for the length of a rain tick.
 patch rain[2].out -> pace.in0
 patch adc.env     -> pace.in1
 patch after.out   -> pace.in2
+patch sieve.out   -> pace.in3
 patch pace.out    -> osc.fm
 patch sand.c      -> osc.pwm
 patch osc.tri     -> toneamp.in
 patch tick.out    -> tonecv.in0
 patch grain.out   -> tonecv.in1
 patch sand.a      -> tonecv.in2
+patch shower.out  -> tonecv.in3
 patch tonecv.out  -> toneamp.cv
 
 # Layer reads rain, ring, and the sky. Cortex watches the layer.
@@ -225,19 +243,40 @@ patch sense.out    -> brain.b
 patch gust.out     -> brain.c
 patch adc.env      -> teach.in0
 patch brain.activity -> teach.in1
+patch sieve.out    -> teach.in2
 patch teach.out    -> brain.learn
 patch decay.out    -> brain.forget
+patch grain.out    -> cortex.learn
 
 # Speech also current-drives the sky, so talking turns the climate over
-# instead of sitting on the speakers. Memory and the afterglow tilt two
-# sky cells in opposite directions so the climate does not repeat.
+# instead of sitting on the speakers. Grain readings write back into
+# each sky cell; the sieve and the afterglow tilt two of them opposite
+# ways so the climate does not repeat.
 patch adc.env   -> sky[*].in
 patch squall.out -> after.gate
-patch sand.activity -> lean.in0
-patch cloud.out     -> lean.in1
-patch after.out     -> lean.in2
+patch sieve.out     -> lean.in0
+patch layer[1].out  -> lean.in1
+patch cloud.out     -> lean.in2
+patch after.out     -> lean.in3
 patch lean.out      -> sky[1].in
 patch lean.inv      -> sky[3].in
+patch flake[0].out  -> echo[0].in0
+patch flake[1].out  -> echo[1].in0
+patch flake[2].out  -> echo[2].in0
+patch flake[3].out  -> echo[3].in0
+patch layer[0].out  -> echo[0].in1
+patch layer[1].out  -> echo[1].in1
+patch layer[2].out  -> echo[2].in1
+patch cortex.a      -> echo[3].in1
+patch sift[0].out   -> echo[0].in2
+patch sift[1].out   -> echo[1].in2
+patch sift[2].out   -> echo[2].in2
+patch sift[3].out   -> echo[3].in2
+patch cloud.out     -> echo[0].in3
+patch after.out     -> echo[1].in3
+patch grain.out     -> echo[2].in3
+patch cortex.activity -> echo[3].in3
+patch echo[i].out   -> sky[i].in
 
 # Timbre and doors. The amplifiers are exponential and almost closed.
 # They no longer share one swell: a grain cloud ducks the room, rain
@@ -267,17 +306,21 @@ patch cloud.out        -> room.res_cv
 patch hiss.pink        -> air.res_cv
 patch gust.out         -> open.in0
 patch after.out        -> open.in1
+patch cloud.out        -> open.in2
 patch open.out         -> air.cutoff_cv
 
 # Grains. Fast mismatched clocks fire short envelopes. Each clock gets
 # a different weather slice and is inhibited by a neighbor flake, so
-# they do not fire in lockstep. Neurons read a different slice of the
-# weather while a flake is open; sand slowly remaps those slices and
-# the dust filter's corner. The squall ducks the grains so they take
-# the afterglow. Nothing from adc.out reaches dust.
+# they do not fire in lockstep. The grain sieve also sidechains the
+# clocks themselves. Neurons read a different slice of the weather
+# while a flake is open; those readings echo into the sky and write
+# back into the cell they came from. Sand slowly remaps the slices
+# and the dust filter's corner. The squall ducks the grains so they
+# take the afterglow. Nothing from adc.out reaches dust.
 patch gust.out     -> stir.in0
 patch adc.env      -> stir.in1
 patch sand.a       -> stir.in2
+patch sieve.out    -> stir.in3
 patch stir.out     -> poke[*].in0
 patch shower.out   -> poke[0].in1
 patch ringbox.out  -> poke[1].in1
@@ -316,6 +359,16 @@ patch sift[1].out  -> sand.b
 patch sift[2].out  -> sand.c
 patch grain.out    -> sand.learn
 patch decay.out    -> sand.forget
+# A grain writes back into the cell it read: the flake is the pulse,
+# the sift reading is the slower hang. Rain, the pair and the ring
+# feel the granulator instead of only feeding it.
+patch flake[i].out -> write[i].in0
+patch sift[i].out  -> write[i].in1
+patch write[0].out -> rain[0].in
+patch write[1].out -> rain[2].in
+patch write[2].out -> a.in
+patch write[3].out -> ring[1].in
+patch write[3].out -> hops[1].in3
 patch sand.activity -> tint.in0
 patch grain.out    -> tint.in1
 patch sand.a       -> tint.in2
@@ -346,4 +399,4 @@ patch dustamp.out -> right.in3
 patch left.out    -> dac.left
 patch right.out   -> dac.right
 
-record adc.env sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out a.v sand.activity dust.cutoff roomamp.gain pairamp.gain dustamp.gain
+record adc.env sky[0].v sky[1].v sky[3].v rain[0].v grit[0].v flake[0].out cloud.out after.out a.v echo[0].out write[0].out recoil.out sieve.out sand.activity dust.cutoff roomamp.gain pairamp.gain dustamp.gain

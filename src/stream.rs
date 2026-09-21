@@ -714,6 +714,61 @@ mod tests {
     }
 
     #[test]
+    fn weather_later_stages_write_back() {
+        // Sift readings have to echo into the sky and kick the cell they
+        // came from. If those mixes stay at rest the climate never feels
+        // the grains, and every squall is the last one again.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let names = [
+            "echo[0].out",
+            "write[0].out",
+            "recoil.out",
+            "sky[1].v",
+            "sky[3].v",
+            "sieve.out",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let mut echo_peak = 0.0f32;
+        let mut write_peak = 0.0f32;
+        let mut recoil_peak = 0.0f32;
+        let mut sieve_peak = 0.0f32;
+        let mut sky_spread = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..6000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            echo_peak = echo_peak.max(now[0].abs());
+            write_peak = write_peak.max(now[1].abs());
+            recoil_peak = recoil_peak.max(now[2].abs());
+            sieve_peak = sieve_peak.max(now[5].abs());
+            sky_spread = sky_spread.max((now[3] - now[4]).abs());
+        }
+        assert!(
+            echo_peak > 0.06,
+            "echo never wrote into the sky: {echo_peak}"
+        );
+        assert!(
+            write_peak > 0.06,
+            "sift never kicked the cell it read: {write_peak}"
+        );
+        assert!(
+            recoil_peak > 0.04,
+            "the pair never felt the grains: {recoil_peak}"
+        );
+        assert!(
+            sieve_peak > 0.2,
+            "the grain sieve stayed shut: {sieve_peak}"
+        );
+        assert!(
+            sky_spread > 0.3,
+            "sky cells stayed locked: spread {sky_spread}"
+        );
+    }
+
+    #[test]
     fn weather_mic_steers_the_sky_not_the_speakers() {
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut dry = Stream::new(built(&text));
