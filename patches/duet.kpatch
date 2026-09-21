@@ -19,7 +19,7 @@
 # patch; click a module to reach its knobs.
 #
 #   kaukonen play --patch patches/duet.kpatch --block 512 --gain 0.3
-#   (raise --block if `late` climbs; 256 is tight on this rack)
+#   (raise --block if `late` climbs; 512 is tight on this rack, 1024 has more room)
 #   then Capture on the page, or `input on` at the console.
 #
 #   kaukonen render --patch patches/duet.kpatch --in your.wav \
