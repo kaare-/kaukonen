@@ -151,6 +151,7 @@ rendered audio embedded so you can play it.
 | [`voice.kpatch`](patches/voice.kpatch) | A percussive voice whose rhythm is RC-1 bursting. | yes |
 | [`listen.kpatch`](patches/listen.kpatch) | Recorded sound teaching a connectome, which colours it back. Needs `--in` or `--input`. | yes |
 | [`duet.kpatch`](patches/duet.kpatch) | A large dual-voice rack (sixteen audible cells, a pulse bank, an eight-cell ring, two memories, three filters) with a patch map on the live page. The microphone envelope steers the banks and the ring; the voice itself never reaches the speakers. | yes |
+| [`weather.kpatch`](patches/weather.kpatch) | A climate that is often quiet: drifting sky cells open a rain bank, a ring, and a chaotic oscillating pair, then shut the amplifiers again. Microphone envelope stirs the sky, not the speakers. | yes |
 | [`demo.kpatch`](patches/demo.kpatch) | The original small recurrent rack: stimulus, TC-3, two neurons, two cells, feedback. | no |
 | [`chaos.kpatch`](patches/chaos.kpatch) | Two cells cross-coupled in their chaotic window. `probe` this one. | no |
 | [`bank64.kpatch`](patches/bank64.kpatch) | Sixty-four mismatched cells weakly coupled through a changing connectome. | no |
@@ -188,7 +189,7 @@ cargo build --release --features realtime
 `play` opens a control page on loopback and the same console as before.
 Every knob is a slider; a bank name still sets every instance. Capture
 picks a microphone, a channel, and shows its level — the patch needs an
-`audioin` (`listen.kpatch` and `duet.kpatch` have one; `live.kpatch` does not).
+`audioin` (`listen.kpatch`, `duet.kpatch` and `weather.kpatch` have one; `live.kpatch` does not).
 
 ```
 > set filt.cutoff 4000

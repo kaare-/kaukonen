@@ -974,7 +974,7 @@ function renderInput(state) {
   if (inp.error) {
     hint.textContent = inp.error;
   } else if (!can) {
-    hint.textContent = 'this patch has no audioin, so a microphone has nowhere to go. listen.kpatch and duet.kpatch have one.';
+    hint.textContent = 'this patch has no audioin, so a microphone has nowhere to go. listen.kpatch, duet.kpatch and weather.kpatch have one.';
   } else if (!listed) {
     hint.textContent = 'open with play to pick a microphone. serve has no audio.';
   } else {
@@ -1323,6 +1323,19 @@ mod tests {
                 && s.map.nodes.get(c.to).is_some_and(|n| n.bank == "hops")
         });
         assert!(ring_wrap, "the ring should close with a feedback hop");
+    }
+
+    #[test]
+    fn weather_carries_a_map_and_a_microphone() {
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = patch::parse(&text).unwrap().build().unwrap();
+        let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
+        assert!(s.input.available);
+        assert!(s.map.nodes.len() >= 40, "nodes={}", s.map.nodes.len());
+        assert!(s.map.nodes.iter().any(|n| n.bank == "sky"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "rain"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "a"));
+        assert!(s.map.cables.iter().any(|c| c.feedback));
     }
 
     #[test]

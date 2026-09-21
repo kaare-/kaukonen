@@ -63,7 +63,10 @@ is the larger session: sixteen audible cells and a pulse bank keep playing,
 an eight-cell ring circulates beside them, a microphone (Capture on the page)
 walks in and teaches the connectome through its envelope rather than playing
 through to the speakers, and the live page draws a clickable map of the whole
-rack. Not every patch is playable —
+rack. [`patches/weather.kpatch`](../patches/weather.kpatch) is the other
+playable session: a slow climate that is often quiet, then bursts, walks a
+ring, and opens a pair of oscillating cells. Capture stirs the sky rather
+than sitting on the speakers. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
 
 ## Finding the interface
@@ -130,7 +133,7 @@ is the knobs — sliders honour each taper, a bank card sets every instance,
 gain / mute / quit sit at the top, and the peak meter is the same number
 the status line prints. Under that, Capture picks a microphone and
 channel and shows the incoming level. The patch needs an `audioin`
-(`listen.kpatch` and `duet.kpatch` have one; `live.kpatch` does not).
+(`listen.kpatch`, `duet.kpatch` and `weather.kpatch` have one; `live.kpatch` does not).
 Sound still leaves
 through the interface; the browser never sees audio.
 

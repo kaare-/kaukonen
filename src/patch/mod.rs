@@ -666,6 +666,7 @@ record cells[*].v brain.w00 brain.activity
             "patches/voice.kpatch",
             "patches/listen.kpatch",
             "patches/duet.kpatch",
+            "patches/weather.kpatch",
             "patches/demo.kpatch",
             "patches/chaos.kpatch",
             "patches/bank64.kpatch",

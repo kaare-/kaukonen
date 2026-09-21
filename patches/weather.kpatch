@@ -1,0 +1,205 @@
+# Weather: a rack that does not always play.
+#
+# A slow climate of four drifting RC-1 cells is the sky. Most of the time
+# they sit under threshold and the amplifiers stay shut — you hear almost
+# nothing. When one of them bursts, it current-drives an audible rain bank,
+# walks a four-cell ring, and opens a pair of cross-coupled cells that
+# oscillate in their chaotic window. A short envelope from the rain plucks
+# a tone. Then adaptation pulls the sky back down and the room goes quiet
+# again.
+#
+# The microphone never reaches the converter. Its envelope stirs the sky,
+# leans on the ring hops, and teaches a memory. Speech makes the weather
+# turn over faster; it is not mixed in as a voice.
+#
+#   kaukonen play --patch patches/weather.kpatch --block 256 --gain 0.4
+#   then Capture on the page, or `input on` at the console.
+#
+#   kaukonen render --patch patches/weather.kpatch --seconds 12 \
+#       --out out/weather.wav --html out/weather.html --stride 16
+#
+# Things worth turning first:
+#
+#   set sky.bias 2.4          # 1.8 is a long drought, 2.6 is almost always raining
+#   set sky.rate 5            # how slowly the climate turns
+#   set sky.drift 0.18        # wander that puts a cell in and out of bursting
+#   set rain.bias 1.35        # the audible bank; keep it hungry so it needs the sky
+#   set rain.rate 200
+#   set fan.a0 0.16           # how hard a squall current-drives the rain
+#   set hops.a0 0.14          # neighbour coupling on the ring
+#   set a.bias 3.2            # the oscillating pair; near 3.2 they go chaotic
+#   set room.cutoff 700
+#   set roomamp.gain 0.04     # the quiet floor with no weather
+#   set adc.gain 2.0          # how hard speech stirs the sky
+#   gain 0.5
+
+rate 48000
+oversample 2
+seconds 12
+seed 23
+mismatch 0.06
+
+module adc      audioin   gain=1.5 env_rate=10
+module sky      rc1[4]    preset=burst rate=7 noise=0.035 drift=0.14 bias=2.05 output_gain=2.2
+module rain     rc1[6]    preset=burst rate=170 noise=0.02 bias=1.45 output_gain=2
+module ring     rc1[4]    preset=burst rate=64 noise=0.02 bias=1.7 output_gain=2
+module hops     mix[4]    a0=0.11 a1=0.1 a2=0.04 a3=0
+module a        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.18 rate=58 output_gain=2.2
+module b        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.12 rate=66 output_gain=2.2
+module layer    neuron[3] w0=0.5 w1=0.3 w2=0.22 leak=10 gain=3.2 response=0.7
+module hear     neuron    w0=0.4 w1=0.35 leak=12 gain=3 response=0.7
+module see      neuron    w0=0.4 w1=0.3 leak=8 gain=3.2 response=0.7
+module brain    tc3       rule=bcm theta_rate=2.5 natural_decay=0.25 scaling=2.2 target_norm=0.9 activity_gain=2 w_max=1.4 w_min=-1.4
+module cortex   tc3       rule=oja gamma=0.5 scaling=0.8 target_norm=1.0 activity_gain=0.15
+module gust     mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.9
+module rainbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0 level=0.85
+module rainbox2 mix       a0=0.7 a1=0.65 a2=0 a3=0 level=0.85
+module shower   mix       a0=0.55 a1=0.5 level=0.8
+module ringbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
+module bed      mix       a0=0.7 a1=0.4 level=0.85
+module cross    mix       a0=0.32 a1=-0.32 a2=0 a3=0
+module teach    mix       a0=0.3 a1=0.12 a2=0 a3=0
+module sense    mix       a0=0.2 a1=0 a2=0 a3=0
+module fan      mix       a0=0.14 a1=0.1 a2=0.03 a3=0
+module tug      mix       a0=0.08 a1=0.1 a2=0 a3=0
+module swell    mix       a0=0.5 a1=0.28 a2=0.35 a3=0 level=1.15
+module open     mix       a0=2 a1=0 a2=0 a3=0 level=3.5
+module lift     mix       a0=0.8 a1=0.35 a2=0.25 a3=0 offset=0.9 level=0.65
+module pace     mix       a0=0.4 a1=0.15 a2=0 a3=0
+module left     mix       a0=1.0 a1=0.45 a2=0.22 a3=0 level=0.9
+module right    mix       a0=0.75 a1=0.7 a2=0.18 a3=0 level=0.9
+module decay    source    shape=dc volts=0.14
+module hiss     noise     level=0.7
+module squall   env       mode=ad attack=0.02 decay=1.8 threshold=1.4 level=5
+module tick     env       mode=ad attack=0.002 decay=0.16 threshold=1.5 level=5
+module osc      vco       tune=92 fm_depth=28 level=2.8
+module room     vcf       cutoff=760 resonance=0.42 cv_depth=0.7 res_depth=0.06 drive=1.3
+module air      vcf       cutoff=520 resonance=0.95 cv_depth=0.85 res_depth=0.1 drive=1.4
+module roomamp  vca       response=exponential gain=0.03 cv_depth=1.05
+module pairamp  vca       response=exponential gain=0.0 cv_depth=1.15
+module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
+module dac      audioout  rate=48000 level=0.32
+
+# The sky is the climate. Its mix is the weather voltage.
+patch sky[0].out -> gust.in0
+patch sky[1].out -> gust.in1
+patch sky[2].out -> gust.in2
+patch sky[3].out -> gust.in3
+patch sky[0].out -> squall.gate
+
+# Rain is hungry. It only fires when the sky, speech, or the memory
+# push current through the fan.
+patch rain[0].out -> rainbox.in0
+patch rain[1].out -> rainbox.in1
+patch rain[2].out -> rainbox.in2
+patch rain[3].out -> rainbox2.in0
+patch rain[4].out -> rainbox2.in1
+patch rain[5].out -> rainbox2.in2
+patch rainbox.out  -> shower.in0
+patch rainbox2.out -> shower.in1
+patch gust.out     -> fan.in0
+patch adc.env      -> fan.in1
+patch brain.a      -> fan.in2
+patch fan.out      -> rain[*].in
+patch rain[0].out  -> tick.gate
+
+# A small ring walks when the weather is up. Speech leans on the hops
+# the same way it does in duet — envelope, not waveform.
+patch ring[0].out -> hops[1].in0
+patch ring[1].out -> hops[2].in0
+patch ring[2].out -> hops[3].in0
+patch ring[3].out -> hops[0].in0
+patch gust.out    -> hops[*].in1
+patch adc.env     -> hops[*].in2
+patch hops[i].out -> ring[i].in
+patch ring[0].out -> ringbox.in0
+patch ring[1].out -> ringbox.in1
+patch ring[2].out -> ringbox.in2
+patch ring[3].out -> ringbox.in3
+patch shower.out  -> bed.in0
+patch ringbox.out -> bed.in1
+
+# Two cells in the chaotic window, inverted into each other. They run
+# all the time, but pairamp is shut until a squall.
+patch a.out     -> cross.in0
+patch b.out     -> cross.in1
+patch cross.out -> b.in
+patch cross.inv -> a.in
+patch gust.out  -> tug.in0
+patch adc.env   -> tug.in1
+patch tug.out   -> a.in
+patch tug.out   -> b.in
+
+# A tone that only exists for the length of a rain tick.
+patch rain[2].out -> pace.in0
+patch adc.env     -> pace.in1
+patch pace.out    -> osc.fm
+patch osc.tri     -> toneamp.in
+patch tick.out    -> toneamp.cv
+
+# Layer reads rain, ring, and the sky. Cortex watches the layer.
+patch rain[0].out -> layer[0].in0
+patch ring[0].out -> layer[1].in0
+patch sky[0].out  -> layer[2].in0
+patch rain[1].out -> layer[0].in1
+patch rain[3].out -> layer[1].in1
+patch rain[5].out -> layer[2].in1
+patch adc.env     -> layer[*].in2
+patch layer[0].out -> cortex.a
+patch layer[1].out -> cortex.b
+patch layer[2].out -> cortex.c
+patch see.out      -> cortex.learn
+patch cortex.activity -> cortex.learn
+patch decay.out    -> cortex.forget
+
+# BCM watches a compressed mic, the weather, and a read of the rain.
+patch adc.out      -> hear.in0
+patch adc.env      -> hear.in1
+patch shower.out   -> see.in0
+patch cortex.activity -> see.in1
+patch hear.out     -> brain.a
+patch adc.env      -> sense.in0
+patch sense.out    -> brain.b
+patch gust.out     -> brain.c
+patch adc.env      -> teach.in0
+patch brain.activity -> teach.in1
+patch teach.out    -> brain.learn
+patch decay.out    -> brain.forget
+
+# Speech also current-drives the sky, so talking turns the climate over
+# instead of sitting on the speakers.
+patch adc.env -> sky[*].in
+
+# Timbre and doors. The amplifiers are exponential and almost closed.
+# Weather, a squall envelope, and speech open them; nothing from adc.out
+# reaches the bed.
+patch gust.out         -> swell.in0
+patch squall.out       -> swell.in1
+patch adc.env          -> swell.in2
+patch swell.out        -> roomamp.cv
+patch swell.out        -> pairamp.cv
+patch brain.a          -> lift.in0
+patch rain[1].out      -> lift.in1
+patch adc.env          -> lift.in2
+patch lift.out         -> room.cutoff_cv
+patch cortex.a         -> air.cutoff_cv
+patch brain.activity   -> room.res_cv
+patch hiss.pink        -> air.res_cv
+patch gust.out         -> open.in0
+patch open.out         -> air.cutoff_cv
+
+patch bed.out   -> room.in
+patch room.out  -> roomamp.in
+patch a.out     -> air.in
+patch air.out   -> pairamp.in
+
+patch roomamp.out -> left.in0
+patch pairamp.out -> left.in1
+patch toneamp.out -> left.in2
+patch roomamp.out -> right.in0
+patch pairamp.out -> right.in1
+patch toneamp.out -> right.in2
+patch left.out    -> dac.left
+patch right.out   -> dac.right
+
+record adc.env sky[0].v sky[1].v rain[0].v ring[0].v a.v b.v layer[0].v brain.activity roomamp.gain pairamp.gain toneamp.gain

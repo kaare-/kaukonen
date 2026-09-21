@@ -568,6 +568,138 @@ mod tests {
         assert!(live_left.iter().any(|s| s.abs() > 0.01));
     }
 
+    #[test]
+    fn weather_makes_sound_without_a_microphone() {
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        assert!(stream.has_input(), "weather should take a microphone");
+        assert!(stream.has_output(), "weather should play");
+        let mut buffer = vec![0.0f32; 512 * 2];
+        let mut peak = 0.0f32;
+        for _ in 0..200 {
+            stream.process(&mut buffer, 2);
+            peak = buffer.iter().fold(peak, |m, s| m.max(s.abs()));
+        }
+        assert!(peak > 0.02, "the climate never opened the room: {peak}");
+        assert!(peak.is_finite());
+    }
+
+    #[test]
+    fn weather_has_quiet_and_bursty_windows() {
+        // The point of this patch: long quiet, then a squall, then quiet
+        // again — not a constant drone. Six seconds is enough for the sky
+        // to turn over at least once.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let block = 512;
+        let channels = 2;
+        let windows = 24; // 0.25 s each at 48 kHz
+        let frames_per_window = 12_000;
+        let mut buffer = vec![0.0f32; block * channels];
+        let mut left = Vec::with_capacity(windows * frames_per_window);
+        let pair_names = ["a.v", "b.v"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut pair_peak = 0.0f32;
+        while left.len() < windows * frames_per_window {
+            stream.process(&mut buffer, channels);
+            for frame in 0..block {
+                left.push(buffer[frame * channels]);
+            }
+            let pair = stream.engine_mut().snapshot_sample(&pair_names);
+            pair_peak = pair_peak.max(pair[0].abs()).max(pair[1].abs());
+        }
+        left.truncate(windows * frames_per_window);
+
+        let mut rms = Vec::with_capacity(windows);
+        for w in 0..windows {
+            let slice = &left[w * frames_per_window..(w + 1) * frames_per_window];
+            let e: f32 = slice.iter().map(|s| s * s).sum();
+            rms.push((e / slice.len() as f32).sqrt());
+        }
+        let quiet = rms.iter().filter(|r| **r < 0.008).count();
+        let hot = rms.iter().filter(|r| **r > 0.03).count();
+        let peak = left.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(
+            quiet >= 2,
+            "never went quiet: {quiet} quiet windows, rms={rms:?}"
+        );
+        assert!(hot >= 2, "never burst: {hot} hot windows, rms={rms:?}");
+        assert!(peak > 0.05, "the squalls were too small: {peak}");
+
+        let names = ["a.v", "b.v"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let pair = stream.engine_mut().snapshot_sample(&names);
+        assert!(
+            pair.iter().any(|v| v.abs() > 0.2),
+            "the oscillating pair never moved: {pair:?}"
+        );
+    }
+
+    #[test]
+    fn weather_mic_steers_the_sky_not_the_speakers() {
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut dry = Stream::new(built(&text));
+        let mut live = Stream::new(built(&text));
+        let rate = live.sample_rate();
+        let block = 512;
+        let channels = 2;
+        let warmup = 30;
+        let heard = 50;
+        let mut phase = 0.0f32;
+        let mut input = vec![0.0f32; block * channels];
+        let mut dry_buf = vec![0.0f32; block * channels];
+        let mut live_buf = vec![0.0f32; block * channels];
+        let mut in_left = Vec::with_capacity(heard * block);
+        let mut live_left = Vec::with_capacity(heard * block);
+
+        for block_i in 0..warmup + heard {
+            for frame in 0..block {
+                phase = (phase + 220.0 / rate).fract();
+                let sample = 0.5 * (phase * std::f32::consts::TAU).sin();
+                input[frame * channels] = sample;
+                input[frame * channels + 1] = sample;
+            }
+            dry.process(&mut dry_buf, channels);
+            live.process_duplex(&input, &mut live_buf, channels);
+            if block_i < warmup {
+                continue;
+            }
+            for frame in 0..block {
+                in_left.push(input[frame * channels]);
+                live_left.push(live_buf[frame * channels]);
+            }
+        }
+
+        let r = pearson(&in_left, &live_left);
+        assert!(
+            r.abs() < 0.25,
+            "live input leaked onto the output (r = {r})"
+        );
+        let names = ["adc.env", "sky[0].v", "roomamp.gain"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let dry_state = dry.engine_mut().snapshot_sample(&names);
+        let live_state = live.engine_mut().snapshot_sample(&names);
+        assert!(
+            live_state[0] > 0.05,
+            "the envelope never rose: {}",
+            live_state[0]
+        );
+        let moved = dry_state
+            .iter()
+            .zip(&live_state)
+            .any(|(a, b)| (a - b).abs() > 0.02);
+        assert!(
+            moved,
+            "speech never turned the climate: dry {dry_state:?} live {live_state:?}"
+        );
+    }
+
     fn pearson(a: &[f32], b: &[f32]) -> f32 {
         let n = a.len() as f32;
         if n == 0.0 {
