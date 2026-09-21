@@ -56,6 +56,10 @@ pub fn devices(verbose: bool) -> Result<(), String> {
         );
         if reports.is_empty() {
             println!("  none. On Linux, check the interface is visible to ALSA (`aplay -l`).");
+            println!(
+                "  On a Mac, System Settings → Sound should list the built-in speakers; \
+                 an interface needs its driver and then a plug."
+            );
         }
         for report in &reports {
             println!(
@@ -82,6 +86,12 @@ pub fn devices(verbose: bool) -> Result<(), String> {
     }
     println!("Select one with --device followed by an index or part of its name,");
     println!("for example `--device 2` or `--device scarlett`.");
+    #[cfg(target_os = "macos")]
+    {
+        println!();
+        println!("On a Mac the built-in speakers are enough to start. `--input` needs");
+        println!("microphone permission under System Settings → Privacy & Security.");
+    }
     Ok(())
 }
 
@@ -135,7 +145,13 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
             "block    {frames} frames ({:.1} ms of latency per buffer)",
             output.latency_ms().unwrap_or(0.0)
         ),
-        None => println!("block    device default (pass --block to pin it)"),
+        None => {
+            println!("block    device default (pass --block to pin it)");
+            println!(
+                "note     without a fixed block the status line cannot report deadline use. \
+                 CoreAudio often hides the size until the stream is running."
+            );
+        }
     }
     if let Some(asked) = output.rate_changed_from {
         println!(
@@ -143,6 +159,15 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
             output.sample_rate()
         );
     }
+    if let Some(asked) = args.channels {
+        if asked as usize != output.channels() {
+            println!(
+                "note     asked for {asked} channels; the device opened {}",
+                output.channels()
+            );
+        }
+    }
+    println!("gain     {}", trim_float(args.gain));
     if (patch_rate - device_rate).abs() > 0.5 {
         println!(
             "note     the patch says rate {}; running it at {} to match the device",
@@ -223,6 +248,9 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
         None
     };
 
+    args.routing
+        .check(output.channels(), input.as_ref().map(|(_, c)| c.channels()))?;
+
     println!("rack     {module_count} modules, {cable_count} cables");
     // The names are what the console's `set` takes, so say them up front rather
     // than making someone type `modules` to find out what is in the rack.
@@ -298,7 +326,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                 None => break,
                 Some(Err(e)) => return Err(format!("cannot read from the console: {e}")),
                 Some(Ok(line)) => {
-                    if !handle(&line, &playback, &directory)? {
+                    if !handle(&line, &playback, &directory, started)? {
                         break;
                     }
                 }
@@ -485,7 +513,12 @@ impl Directory {
 }
 
 /// Handle one console line. Returns false to stop playing.
-fn handle(line: &str, playback: &backend::Playback, directory: &Directory) -> Result<bool, String> {
+fn handle(
+    line: &str,
+    playback: &backend::Playback,
+    directory: &Directory,
+    started: Instant,
+) -> Result<bool, String> {
     let mut words = line.split_whitespace();
     let Some(command) = words.next() else {
         return Ok(true);
@@ -577,7 +610,7 @@ fn handle(line: &str, playback: &backend::Playback, directory: &Directory) -> Re
             })?;
             println!("  unmuted");
         }
-        "stats" => report(playback, Instant::now()),
+        "stats" => report(playback, started),
         other => println!("  unknown command '{other}'. Type `help`."),
     }
     let _ = std::io::stdout().flush();

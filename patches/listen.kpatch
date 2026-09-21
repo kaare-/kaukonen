@@ -37,7 +37,7 @@ module swell mix      a0=2 a1=0 a2=0 a3=0 level=4
 module lift  mix      a0=1.6 a1=0.8 a2=0 a3=0 offset=1.2 level=0.8
 module filt  vcf      cutoff=380 resonance=0.35 cv_depth=1.2 res_depth=0.12 drive=1.3
 module amp   vca      response=exponential gain=0.1 cv_depth=1
-module dac   audioout rate=48000 level=1.4
+module dac   audioout rate=48000 level=1.0
 
 # The sound itself, its envelope, and a cell give the connectome three
 # channels to correlate. All kept small, for the rule's sake.

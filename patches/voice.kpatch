@@ -8,6 +8,10 @@
 # Gating from a single cell rather than the summed mixer is deliberate: the
 # cells desynchronise, and a sum of three spikes that no longer coincide
 # never clears a threshold.
+#
+# To play it:
+#
+#   kaukonen play --patch patches/voice.kpatch --block 256 --gain 0.3
 
 rate 48000
 oversample 2

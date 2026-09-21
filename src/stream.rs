@@ -122,6 +122,12 @@ impl Stream {
             channels.min(input.len().max(1))
         };
 
+        // A leftover live sample from a previous duplex block would otherwise
+        // keep playing after the host stopped feeding us.
+        if input_channels == 0 {
+            self.clear_live();
+        }
+
         for frame in 0..frames {
             if input_channels > 0 {
                 // Mono sum of whatever the host gave us for this frame.
@@ -134,24 +140,25 @@ impl Stream {
                         counted += 1;
                     }
                 }
+                // A short input buffer is silence for that frame, not a repeat
+                // of the previous one.
                 let live = if counted > 0 {
                     sum / counted as f32
                 } else {
                     0.0
                 };
-                for index in &self.inputs {
-                    if let Some(module) = self
-                        .engine
-                        .network
-                        .get_mut(ModuleId(*index))
-                        .as_audio_in_mut()
-                    {
-                        module.set_live(live);
-                    }
-                }
+                self.set_live(live);
             }
 
             self.engine.frame();
+
+            // Live overrides the file for one host frame, including every
+            // oversampled step inside it. After the frame it has to go, or
+            // the next process() without input would freeze on the last
+            // sample.
+            if input_channels > 0 {
+                self.clear_live();
+            }
 
             let (left, right) = self.converter_frame();
             let base = frame * channels;
@@ -159,6 +166,32 @@ impl Stream {
                 if let Some(slot) = output.get_mut(base + channel) {
                     *slot = if channel % 2 == 0 { left } else { right };
                 }
+            }
+        }
+    }
+
+    fn set_live(&mut self, sample: f32) {
+        for index in &self.inputs {
+            if let Some(module) = self
+                .engine
+                .network
+                .get_mut(ModuleId(*index))
+                .as_audio_in_mut()
+            {
+                module.set_live(sample);
+            }
+        }
+    }
+
+    fn clear_live(&mut self) {
+        for index in &self.inputs {
+            if let Some(module) = self
+                .engine
+                .network
+                .get_mut(ModuleId(*index))
+                .as_audio_in_mut()
+            {
+                module.clear_live();
             }
         }
     }
@@ -348,6 +381,60 @@ mod tests {
         assert!(
             peak > 0.4,
             "the loaded file never reached the converter (peak {peak})"
+        );
+    }
+
+    #[test]
+    fn a_live_sample_does_not_stick_after_the_block_ends() {
+        // Live overrides the file for one host frame. After the host stops
+        // feeding us, the converter has to fall silent (or back to the file),
+        // not hold the last sample forever.
+        let text = "\
+            rate 8000\n\
+            module adc audioin gain=1\n\
+            module dac audioout rate=8000 level=1 dc_block=0\n\
+            patch adc.out -> dac.left\npatch adc.out -> dac.right\n";
+        let mut stream = Stream::new(built(text));
+        let input = vec![0.4; 64];
+        let mut output = vec![0.0; 64];
+        stream.process_duplex(&input, &mut output, 1);
+        let during = output.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(
+            during > 0.2,
+            "live input never reached the converter: {during}"
+        );
+
+        let mut later = vec![0.0; 64];
+        stream.process(&mut later, 1);
+        let leftover = later.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(
+            leftover < 0.05,
+            "the last live sample kept playing: {leftover}"
+        );
+    }
+
+    #[test]
+    fn a_short_input_buffer_is_silence_not_a_repeat() {
+        let text = "\
+            rate 8000\n\
+            module adc audioin gain=1\n\
+            module dac audioout rate=8000 level=1 dc_block=0\n\
+            patch adc.out -> dac.left\npatch adc.out -> dac.right\n";
+        let mut stream = Stream::new(built(text));
+        // One frame of input for a 4-frame, 1-channel output. The rest of
+        // the block has to read as zero, not as that first sample again.
+        let input = vec![0.5];
+        let mut output = vec![-1.0; 4];
+        stream.process_duplex(&input, &mut output, 1);
+        assert!(
+            (output[0] - 0.5).abs() < 0.05,
+            "first frame should be the live sample: {:?}",
+            output
+        );
+        assert!(
+            output[1..].iter().all(|s| s.abs() < 0.05),
+            "later frames repeated the live sample: {:?}",
+            output
         );
     }
 

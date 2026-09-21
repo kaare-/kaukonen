@@ -33,10 +33,14 @@ pub fn rk2(x: f32, dt: f32, f: impl Fn(f32) -> f32) -> f32 {
 }
 
 /// Softplus, used as a smooth rectifier around a threshold.
+///
+/// The tails are exact enough at `f32`: `ln(1+e^12) - 12` is about 6e-6, and
+/// `e^{-12}` is the same order. Cutting over there lets a cell sitting well
+/// below threshold skip the exp, which is the expensive part of an RC-1 step.
 pub fn softplus(x: f32) -> f32 {
-    if x > 20.0 {
+    if x > 12.0 {
         x
-    } else if x < -20.0 {
+    } else if x < -12.0 {
         0.0
     } else {
         x.exp().ln_1p()
@@ -62,5 +66,24 @@ mod tests {
     fn zero_leak_is_pure_integration() {
         let v = leaky_integrate(0.0, 2.0, 0.0, 0.5);
         assert!((v - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn softplus_matches_the_log_sum_exp_in_the_middle() {
+        for x in [-30.0, -12.5, -4.0, -0.5, 0.0, 0.5, 3.0, 12.5, 30.0] {
+            let got = softplus(x);
+            let exact = if x > 0.0 {
+                x + (-x).exp().ln_1p()
+            } else {
+                x.exp().ln_1p()
+            };
+            let err = (got - exact).abs();
+            assert!(
+                err < 1e-5,
+                "softplus({x}) = {got}, exact {exact}, err {err}"
+            );
+            assert!(got.is_finite());
+            assert!(got >= 0.0);
+        }
     }
 }

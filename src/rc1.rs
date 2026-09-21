@@ -228,29 +228,34 @@ impl Rc1 {
         self.params.threshold + self.state.drift
     }
 
-    fn derivatives(&self, v: f32, r: f32, s: f32, i_in: f32) -> (f32, f32, f32) {
+    fn derivatives(&self, v: f32, r: f32, s: f32, i_in: f32, thresh: f32) -> (f32, f32, f32) {
         let p = &self.params;
         let c = p.capacitance.max(1e-4);
+        let v2 = v * v;
         // Smooth regenerative current: quadratic / cubic N-shape, plus a
         // softplus kick that grows as v approaches the firing region.
-        let exc = p.sharpness * v * v - p.cubic * v * v * v + 0.15 * softplus(p.sharpness * v);
+        let exc = p.sharpness * v2 - p.cubic * v2 * v + 0.15 * softplus(p.sharpness * v);
         let drive = p.drive_gain * i_in + p.bias;
         // Hindmarsh–Rose-like: recovery `r` is added, adaptation `s` subtracted.
         // `discharge` scales the recovery contribution (1.0 = standard HR).
         let dv = (p.discharge * r + exc - s + drive - p.leak * v) / c;
-        let dr = p.recovery_rate * (1.0 - p.recovery_drive * v * v - r);
-        let ds = p.adaptation_rate * (p.adaptation_depth * (v - self.effective_threshold()) - s);
+        let dr = p.recovery_rate * (1.0 - p.recovery_drive * v2 - r);
+        let ds = p.adaptation_rate * (p.adaptation_depth * (v - thresh) - s);
         (dv, dr, ds)
     }
 
     fn rk2_step(&mut self, i_in: f32, dt_model: f32) {
         let (v, r, s) = (self.state.v, self.state.r, self.state.s);
-        let (k1v, k1r, k1s) = self.derivatives(v, r, s, i_in);
+        // Drift does not move inside a step, so the threshold is the same
+        // for both RK2 stages.
+        let thresh = self.effective_threshold();
+        let (k1v, k1r, k1s) = self.derivatives(v, r, s, i_in, thresh);
         let (k2v, k2r, k2s) = self.derivatives(
             v + dt_model * k1v,
             r + dt_model * k1r,
             s + dt_model * k1s,
             i_in,
+            thresh,
         );
         self.state.v += 0.5 * dt_model * (k1v + k2v);
         self.state.r += 0.5 * dt_model * (k1r + k2r);

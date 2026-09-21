@@ -5,7 +5,7 @@
 # excitability, mixed, filtered and amplified. TC-3 watches them and its
 # plasticity sweeps the filter, so the timbre keeps moving on its own.
 #
-#   kaukonen play --patch patches/live.kpatch --device <yours> --block 256 --gain 0.4
+#   kaukonen play --patch patches/live.kpatch --device <yours> --block 256 --gain 0.3
 #
 # Things worth turning first, at the prompt:
 #

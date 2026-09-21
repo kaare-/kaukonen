@@ -120,7 +120,7 @@ fn cmd_play(args: &Args) -> Result<(), String> {
         block: args.get_usize("block")?.map(|b| b as u32),
         channels: args.get_usize("channels")?.map(|c| c as u16),
         routing,
-        gain: args.get_f32("gain")?.unwrap_or(1.0),
+        gain: args.get_f32("gain")?.unwrap_or(0.3),
         sets: args.all("set"),
         record: args.get("record"),
         seconds: args.get_f32("seconds")?,
@@ -576,9 +576,7 @@ fn cmd_bench(args: &Args) -> Result<(), String> {
     // An average faster than real time is not enough to stream without
     // glitching: one block that misses its deadline is an audible dropout.
     let block = args.get_usize("block")?.unwrap_or(256).max(1);
-    let rebuilt = load(source)?
-        .build()
-        .map_err(|e| format!("{source}: {e}"))?;
+    let rebuilt = patch.build().map_err(|e| format!("{source}: {e}"))?;
     let mut stream = Stream::new(rebuilt);
     if !stream.has_output() {
         println!("  (no audioout, so there is nothing to stream)");

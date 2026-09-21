@@ -81,6 +81,45 @@ cargo run --bin kaukonen -- render  --patch patches/voice.kpatch \
     --out out/voice.wav --html out/voice.html --stride 12
 ```
 
+### On a Mac laptop
+
+Copy and paste this as one block. It installs Rust if needed, clones the
+repo, runs the tests, and plays `live.kpatch` through the built-in speakers.
+
+```bash
+# Command-line tools, if this Mac has never compiled anything
+xcode-select --install
+
+# Rust, if rustc is not already on the PATH
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+
+git clone https://github.com/kaare-/kaukonen.git
+cd kaukonen
+
+# Offline path — no extra packages, nothing talks to hardware
+cargo test
+mkdir -p out
+cargo run --release --bin kaukonen -- inspect --patch patches/live.kpatch
+cargo run --release --bin kaukonen -- render --patch patches/voice.kpatch \
+    --out out/voice.wav --html out/voice.html --stride 12
+open out/voice.html
+
+# Live through the built-in speakers (or any CoreAudio interface)
+cargo build --release --features realtime
+./target/release/kaukonen devices
+./target/release/kaukonen play --patch patches/live.kpatch --block 256 --gain 0.3
+```
+
+macOS needs nothing extra for CoreAudio. `--input` is the one thing that
+triggers a microphone-permission prompt, under System Settings → Privacy &
+Security → Microphone. Bluetooth headphones add a lot of latency; the
+built-in speakers or a USB interface are the ones to tune `--block` against.
+
+At the play prompt, `set cells.rate 400` and `gain 0.4` are the first two
+things worth trying. `help` lists the rest. Details in
+[`docs/realtime.md`](docs/realtime.md).
+
 `render` writes a WAV, a CSV trace and a self-contained HTML page. Open the page
 in a browser: it has stacked traces with shared zoom and pan, phase portraits, a
 spike raster, an interval histogram, a spectrum, a diagram of the patch, and the
@@ -133,8 +172,8 @@ can burst over seconds while another oscillates at 300 Hz in the same rack.
 ```bash
 cargo build --release --features realtime
 
-kaukonen devices                                   # find the interface
-kaukonen play --patch patches/voice.kpatch \
+./target/release/kaukonen devices                  # find the interface
+./target/release/kaukonen play --patch patches/live.kpatch \
     --device scarlett --block 256 --gain 0.3
 ```
 

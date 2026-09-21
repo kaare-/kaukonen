@@ -195,8 +195,8 @@ impl AnalogModule for Tc3 {
         let p = &mut self.params;
         match name {
             "natural_decay" => p.natural_decay = v,
-            "w_min" => p.w_min = v,
-            "w_max" => p.w_max = v,
+            "w_min" => p.w_min = v.min(p.w_max),
+            "w_max" => p.w_max = v.max(p.w_min),
             "activity_gain" => p.activity_gain = v,
             "activity_rate" => p.activity_rate = v,
             "drift" => p.drift = v,
@@ -566,6 +566,18 @@ mod tests {
             wild.step(&[1.0, 1.0, 1.0, 1.0, 0.0], 0.0005);
         }
         assert!(wild.state.weights[0][0].is_finite());
+    }
+
+    #[test]
+    fn turning_the_end_stops_cannot_cross_them() {
+        let mut m = Tc3::default();
+        m.set_param("w_min", 0.0).unwrap();
+        m.set_param("w_max", 0.0).unwrap();
+        assert!(m.params.w_min <= m.params.w_max);
+        m.set_param("w_max", 1.5).unwrap();
+        m.set_param("w_min", -0.5).unwrap();
+        assert!((m.params.w_max - 1.5).abs() < 1e-6);
+        assert!((m.params.w_min + 0.5).abs() < 1e-6);
     }
 
     #[test]

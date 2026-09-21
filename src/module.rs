@@ -6,7 +6,7 @@ use crate::param::{ParamError, ParamSpec};
 use crate::rc1::Rc1;
 use crate::source::Source;
 use crate::tc3::Tc3;
-use crate::types::{InstanceVariation, Volt};
+use crate::types::{clamp_rail, InstanceVariation, Volt};
 use crate::util::{Env, Mix, Noise, Vca, Vcf, Vco};
 
 /// Maximum jacks on any one module (TC-3 has 5 inputs / 4 outputs).
@@ -62,7 +62,7 @@ impl ModuleOutputs {
     /// used to do once per module per step.
     pub fn clamp_all(&mut self, rail: Volt) {
         for v in &mut self.data[..self.len] {
-            *v = v.clamp(-rail, rail);
+            *v = clamp_rail(*v, rail);
         }
     }
 }

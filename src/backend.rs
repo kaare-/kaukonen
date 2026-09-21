@@ -24,6 +24,10 @@ const FADE_SECONDS: f32 = 0.05;
 /// Seconds of recording the audio thread may stage before the writer drains it.
 const RECORD_STAGE_SECONDS: f32 = 2.0;
 
+/// Shared i16 full-scale. Using the same number both ways keeps a duplex
+/// loop free of the half-LSB DC that 32767-out / 32768-in would introduce.
+const I16_SCALE: f32 = 32767.0;
+
 /// What a device can do, flattened for printing.
 #[derive(Clone, Debug)]
 pub struct DeviceReport {
@@ -351,6 +355,49 @@ impl Default for Routing {
     }
 }
 
+impl Routing {
+    /// Refuse a channel index the negotiated stream does not have, rather
+    /// than silently folding it onto the last channel.
+    pub fn check(
+        &self,
+        output_channels: usize,
+        input_channels: Option<usize>,
+    ) -> Result<(), String> {
+        if output_channels == 0 {
+            return Err("the device opened with no output channels".to_string());
+        }
+        if self.left >= output_channels {
+            return Err(format!(
+                "--out-left {} is past this device's {} output channel{}",
+                self.left + 1,
+                output_channels,
+                if output_channels == 1 { "" } else { "s" }
+            ));
+        }
+        if output_channels > 1 && self.right >= output_channels {
+            return Err(format!(
+                "--out-right {} is past this device's {} output channels",
+                self.right + 1,
+                output_channels
+            ));
+        }
+        if let Some(n) = input_channels {
+            if n == 0 {
+                return Err("the input device opened with no channels".to_string());
+            }
+            if self.input >= n {
+                return Err(format!(
+                    "--in-channel {} is past this device's {} input channel{}",
+                    self.input + 1,
+                    n,
+                    if n == 1 { "" } else { "s" }
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Counters the audio thread publishes for the console to read.
 #[derive(Debug, Default)]
 pub struct Stats {
@@ -424,8 +471,14 @@ impl Ring {
         let write = self.write.load(Ordering::Relaxed);
         let next = (write + 1) % self.slots.len();
         if next == self.read.load(Ordering::Acquire) {
+            // Drop the oldest sample so the newest one still lands. Keeping
+            // stale audio would grow the capture delay under overload; the
+            // comment above promised this and the previous body did the
+            // opposite.
+            let read = self.read.load(Ordering::Relaxed);
+            self.read
+                .store((read + 1) % self.slots.len(), Ordering::Release);
             self.overflowed.fetch_add(1, Ordering::Relaxed);
-            return;
         }
         self.slots[write].store(value.to_bits(), Ordering::Relaxed);
         self.write.store(next, Ordering::Release);
@@ -590,7 +643,7 @@ pub fn play(mut rack: Rack, device: &Device, options: PlayOptions) -> Result<Pla
                     let slice = &mut staging[..needed];
                     writer.fill(&mut rack, slice);
                     for (out, sample) in buffer.iter_mut().zip(slice.iter()) {
-                        *out = (sample.clamp(-1.0, 1.0) * 32767.0) as i16;
+                        *out = (sample.clamp(-1.0, 1.0) * I16_SCALE) as i16;
                     }
                 },
                 on_error,
@@ -645,7 +698,7 @@ fn build_input(
             &config.config,
             move |buffer: &[i16], _| {
                 for frame in buffer.chunks(channels) {
-                    let sample = frame.get(take).copied().unwrap_or(0) as f32 / 32768.0;
+                    let sample = frame.get(take).copied().unwrap_or(0) as f32 / I16_SCALE;
                     ring.push(sample);
                 }
             },
@@ -830,15 +883,19 @@ mod tests {
     }
 
     #[test]
-    fn a_full_ring_drops_and_counts_rather_than_blocking() {
+    fn a_full_ring_drops_the_oldest_and_counts() {
         // An audio callback cannot wait, so overflow has to be visible instead.
+        // The newest audio has to survive: keeping the oldest would grow the
+        // capture delay under overload instead of holding it near one block.
         let ring = Ring::new(4);
         for i in 0..10 {
             ring.push(i as f32);
         }
         assert_eq!(ring.overflowed(), 7, "capacity is one less than the slots");
         assert_eq!(ring.len(), 3);
-        assert_eq!(ring.pop(), Some(0.0));
+        assert_eq!(ring.pop(), Some(7.0));
+        assert_eq!(ring.pop(), Some(8.0));
+        assert_eq!(ring.pop(), Some(9.0));
     }
 
     #[test]
@@ -907,6 +964,43 @@ mod tests {
             20_000,
             "every sample was either read or counted as dropped"
         );
+    }
+
+    #[test]
+    fn routing_refuses_a_channel_the_device_does_not_have() {
+        let stereo = Routing {
+            left: 0,
+            right: 1,
+            input: 0,
+        };
+        assert!(stereo.check(2, None).is_ok());
+        assert!(stereo.check(2, Some(2)).is_ok());
+        // A one-channel device only uses left; the unused right index is not
+        // an error, or the default --out-right 2 would refuse every mono box.
+        assert!(stereo.check(1, None).is_ok());
+        let wide = Routing {
+            left: 2,
+            right: 3,
+            input: 1,
+        };
+        let err = wide.check(2, None).expect_err("left past the device");
+        assert!(err.contains("--out-left 3"), "{err}");
+        let err = Routing {
+            left: 0,
+            right: 3,
+            input: 0,
+        }
+        .check(2, None)
+        .expect_err("right past a stereo device");
+        assert!(err.contains("--out-right 4"), "{err}");
+        let err = Routing {
+            left: 0,
+            right: 1,
+            input: 1,
+        }
+        .check(2, Some(1))
+        .expect_err("input past a mono device");
+        assert!(err.contains("--in-channel 2"), "{err}");
     }
 
     #[test]

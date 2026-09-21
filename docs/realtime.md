@@ -20,6 +20,41 @@ sudo dnf install alsa-lib-devel     # Fedora
 
 macOS and Windows need nothing extra; they use CoreAudio and WASAPI.
 
+On a Mac laptop, this is a first session that should make sound:
+
+```bash
+xcode-select --install                          # if this Mac has never compiled
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+
+git clone https://github.com/kaare-/kaukonen.git
+cd kaukonen
+cargo build --release --features realtime
+./target/release/kaukonen devices
+./target/release/kaukonen play --patch patches/live.kpatch --block 256 --gain 0.3
+```
+
+The default output is the built-in speakers. `--device "MacBook"` (or whatever
+`devices` printed) pins them; `--device scarlett` is enough for a Focusrite
+once its driver is installed. Start with `--gain 0.3` — that is also the
+default — and watch `peak` in the status line before turning it up.
+
+`--input` is the one thing that needs a permission: System Settings →
+Privacy & Security → Microphone, and allow the terminal (or iTerm) that
+launched `kaukonen`. Without `--input` nothing asks.
+
+Bluetooth headphones add tens of milliseconds and often hide their buffer
+size (`devices` then prints no range, and the status line cannot report
+deadline use). Pass `--block 256` on wired or built-in output; raise it to
+512 or 1024 if `late` starts climbing. An Aggregate Device in Audio MIDI
+Setup is how to combine a USB interface with the built-in mic if they
+are not the same box.
+
+CoreAudio frequently reports `BufferSize::Unknown` until the stream is
+running. That is why `play` without `--block` says it cannot report
+deadline use — pin the block so the status line has a number to compare
+against.
+
 [`patches/live.kpatch`](../patches/live.kpatch) is written for this: the sound
 comes entirely from three excitable cells running at an audible rate, and its
 comments list the knobs worth turning first. Not every patch is playable —
@@ -162,8 +197,9 @@ each `audioout` has `level` and `headroom` knobs. Output fades up over 50 ms at
 the start and down at the end, so starting and stopping does not put a step
 through whatever is connected.
 
-Even so: start with `--gain 0.2`, check `peak` in the status line, and turn it up
-from there. A patch with feedback can get much louder than the one you tested.
+Even so: start with the default `--gain 0.3`, check `peak` in the status line,
+and turn it up from there. A patch with feedback can get much louder than the
+one you tested.
 
 ## JACK and PipeWire
 
