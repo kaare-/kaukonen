@@ -59,8 +59,9 @@ against.
 [`patches/live.kpatch`](../patches/live.kpatch) is written for this: the sound
 comes entirely from three excitable cells running at an audible rate, and its
 comments list the knobs worth turning first. [`patches/duet.kpatch`](../patches/duet.kpatch)
-is the larger session: those cells keep playing, and a microphone (Capture on
-the page) walks in and teaches the connectome. Not every patch is playable —
+is the larger session: twelve audible cells and a pulse bank keep playing,
+a microphone (Capture on the page) walks in and teaches the connectome, and
+the live page draws a clickable map of the whole rack. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
 
 ## Finding the interface

@@ -6,8 +6,7 @@
 //! across a bank, an interval histogram and a spectrum, and embeds the rendered
 //! audio so a headless run can still be listened to. One file, no CDN.
 
-use crate::module::AnalogModule;
-use crate::network::{ModuleId, Network};
+use crate::network::Network;
 use crate::record::Recorder;
 use crate::schedule::Schedule;
 use crate::wav::{Audio, SampleFormat};
@@ -113,7 +112,7 @@ impl<'a> Scope<'a> {
         if let (Some(network), Some(schedule)) = (self.network, self.schedule) {
             page.push_str("<section><h2>Patch</h2>\n");
             if network.len() <= MAX_DIAGRAM_MODULES {
-                page.push_str(&patch_svg(network, schedule));
+                page.push_str(&crate::diagram::svg(network, schedule));
                 page.push_str(
                     "<p class=\"notes\">Dashed cables close a feedback loop and \
                      carry one step of delay.</p>",
@@ -222,100 +221,6 @@ fn push_numbers(out: &mut String, values: &[f32], places: usize) {
         }
     }
     out.push(']');
-}
-
-/// Column and row of each module, from the evaluation order.
-fn layout(network: &Network, schedule: &Schedule) -> Vec<(usize, usize)> {
-    let mut column = vec![0usize; network.len()];
-    // Producers come before consumers in the schedule, so one pass is enough.
-    for index in &schedule.order {
-        for arrival in &schedule.incoming[*index] {
-            // A feedback cable points backwards; letting it push the column
-            // along would stretch the diagram without saying anything.
-            if !arrival.delayed {
-                column[*index] = column[*index].max(column[arrival.from] + 1);
-            }
-        }
-    }
-    let mut next_row = vec![0usize; column.iter().copied().max().unwrap_or(0) + 1];
-    let mut placed = vec![(0usize, 0usize); network.len()];
-    for index in &schedule.order {
-        let col = column[*index];
-        placed[*index] = (col, next_row[col]);
-        next_row[col] += 1;
-    }
-    placed
-}
-
-/// The patch as an SVG diagram.
-fn patch_svg(network: &Network, schedule: &Schedule) -> String {
-    const BOX_W: f32 = 132.0;
-    const BOX_H: f32 = 36.0;
-    const COL: f32 = 186.0;
-    const ROW: f32 = 52.0;
-    const PAD: f32 = 16.0;
-
-    let placed = layout(network, schedule);
-    let columns = placed.iter().map(|(c, _)| *c).max().unwrap_or(0) + 1;
-    let rows = placed.iter().map(|(_, r)| *r).max().unwrap_or(0) + 1;
-    let width = PAD * 2.0 + columns as f32 * COL;
-    let height = PAD * 2.0 + rows as f32 * ROW;
-    let at = |index: usize| {
-        let (c, r) = placed[index];
-        (PAD + c as f32 * COL, PAD + r as f32 * ROW)
-    };
-
-    let mut svg = String::new();
-    let _ = writeln!(
-        svg,
-        "<svg class=\"patch\" viewBox=\"0 0 {width:.0} {height:.0}\" \
-         xmlns=\"http://www.w3.org/2000/svg\">"
-    );
-    svg.push_str(
-        "<defs><marker id=\"tip\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" \
-         markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\">\
-         <path d=\"M0,0 L8,4 L0,8 z\" fill=\"#6b7280\"/></marker></defs>\n",
-    );
-
-    for (index, cable) in network.cables().iter().enumerate() {
-        let (x0, y0) = at(cable.from.0);
-        let (x1, y1) = at(cable.to.0);
-        let (sx, sy) = (x0 + BOX_W, y0 + BOX_H / 2.0);
-        let (ex, ey) = (x1, y1 + BOX_H / 2.0);
-        let delayed = schedule.feedback.contains(&index);
-        let bow = if delayed { -28.0 } else { 0.0 };
-        let curve = ((ex - sx).abs() * 0.4).max(30.0);
-        let _ = writeln!(
-            svg,
-            "<path d=\"M{sx:.0},{sy:.0} C{:.0},{:.0} {:.0},{:.0} {ex:.0},{ey:.0}\" \
-             class=\"{}\" marker-end=\"url(#tip)\"/>",
-            sx + curve,
-            sy + bow,
-            ex - curve,
-            ey + bow,
-            if delayed { "cable feedback" } else { "cable" }
-        );
-    }
-
-    for index in 0..network.len() {
-        let (x, y) = at(index);
-        let module = network.get(ModuleId(index));
-        let _ = writeln!(
-            svg,
-            "<rect x=\"{x:.0}\" y=\"{y:.0}\" width=\"{BOX_W:.0}\" height=\"{BOX_H:.0}\" \
-             rx=\"6\" class=\"module\"/>\
-             <text x=\"{:.0}\" y=\"{:.0}\" class=\"label\">{}</text>\
-             <text x=\"{:.0}\" y=\"{:.0}\" class=\"kind\">{}</text>",
-            x + 8.0,
-            y + 15.0,
-            escape(network.label(ModuleId(index))),
-            x + 8.0,
-            y + 29.0,
-            escape(module.kind_name())
-        );
-    }
-    svg.push_str("</svg>\n");
-    svg
 }
 
 fn escape(text: &str) -> String {
@@ -893,25 +798,8 @@ mod tests {
             "rate 200\nseconds 0.1\nmodule a neuron\nmodule b neuron\n\
              patch a.out -> b.in0\npatch b.out -> a.in0\nrecord a.v\n",
         );
-        let svg = patch_svg(&network, &schedule);
+        let svg = crate::diagram::svg(&network, &schedule);
         assert_eq!(svg.matches("class=\"cable\"").count(), 1);
         assert_eq!(svg.matches("cable feedback").count(), 1);
-    }
-
-    #[test]
-    fn layout_puts_producers_left_of_consumers() {
-        let (_, network, schedule) = recorded(
-            "rate 200\nseconds 0.1\nmodule c neuron\nmodule b neuron\nmodule a source\n\
-             patch a.out -> b.in0\npatch b.out -> c.in0\n",
-        );
-        let placed = layout(&network, &schedule);
-        let column = |label: &str| {
-            let index = (0..network.len())
-                .find(|i| network.label(ModuleId(*i)) == label)
-                .unwrap();
-            placed[index].0
-        };
-        assert!(column("a") < column("b"));
-        assert!(column("b") < column("c"));
     }
 }

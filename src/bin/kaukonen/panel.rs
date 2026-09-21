@@ -4,9 +4,11 @@
 //! names the console's `set` takes, grouped the same way, reachable from a
 //! browser on the same machine. Nothing is bound off loopback.
 
+use kaukonen::diagram::Map;
 use kaukonen::module::AnalogModule;
 use kaukonen::network::ModuleId;
 use kaukonen::param::{self, trim_float, ParamSpec};
+use kaukonen::schedule::Schedule;
 use kaukonen::BuiltPatch;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -23,6 +25,7 @@ pub struct Surface {
     pub muted: bool,
     pub quit: bool,
     pub input: InputView,
+    pub map: Map,
     pub modules: Vec<Bank>,
 }
 
@@ -205,6 +208,7 @@ impl Surface {
                 available: patch_has_audioin(built),
                 ..InputView::default()
             },
+            map: Map::of(&built.network, &Schedule::build(&built.network)),
             modules,
         }
     }
@@ -261,6 +265,8 @@ impl Surface {
         );
         out.push_str(",\"input\":");
         self.input.write_json(&mut out);
+        out.push_str(",\"map\":");
+        out.push_str(&self.map.to_json());
         if !extra.is_empty() {
             out.push(',');
             out.push_str(extra);
@@ -824,6 +830,21 @@ button.danger { border-color: #7f1d1d; color: #fecaca; }
             text-align: right; }
 .row .doc { grid-column: 1 / -1; font-size: 11px; color: #6b7280; margin: -4px 0 4px; }
 .hint { color: #6b7280; font-size: 12px; margin-top: 18px; }
+.mapwrap { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
+           padding: 10px 12px 8px; margin-bottom: 18px; }
+.mapwrap header { display: flex; justify-content: space-between; align-items: baseline;
+                  margin-bottom: 8px; }
+.mapscroll { overflow: auto; max-height: 560px; }
+svg.map { display: block; width: max-content; height: auto; max-width: none; }
+svg.map .module { stroke: #39414d; stroke-width: 1.2; cursor: pointer; }
+svg.map .module:hover, svg.map .module.on { stroke: #60a5fa; stroke-width: 1.8; }
+svg.map .label { fill: #e5e7eb; font: 600 11px ui-sans-serif, sans-serif;
+                 pointer-events: none; }
+svg.map .kind { fill: #7c8899; font: 10px ui-monospace, monospace;
+                pointer-events: none; }
+svg.map .cable { fill: none; stroke: #4b5563; stroke-width: 1.3; }
+svg.map .cable.feedback { stroke: #f59e0b; stroke-dasharray: 5 4; }
+.card.focus { border-color: #60a5fa; }
 code { font-family: ui-monospace, monospace; color: #93c5fd; }
 </style>
 </head>
@@ -858,6 +879,15 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
   <div class="stat">in <b id="inpeak">—</b></div>
 </div>
 <p class="note" id="inputhint"></p>
+<div class="mapwrap" id="mapwrap" hidden>
+  <header>
+    <h2>patch</h2>
+    <span class="stat" id="mapstat"></span>
+  </header>
+  <div class="mapscroll" id="mapscroll"></div>
+  <p class="note">Click a module to open its knobs. Dashed cables close a
+  feedback loop.</p>
+</div>
 <div class="grid" id="grid"></div>
 <p class="hint">Sound comes out of the audio interface, not this page. A
 microphone goes in the same way — the browser never sees audio. These are
@@ -911,6 +941,7 @@ function render(state) {
   if (state.elapsed != null) $('elapsed').textContent = Number(state.elapsed).toFixed(1);
   if (state.late != null) $('late').textContent = state.late;
   renderInput(state);
+  if (state.map && !$('mapscroll').dataset.drawn) drawMap(state.map);
   const grid = $('grid');
   if (grid.childElementCount === 0) {
     state.modules.forEach(mod => grid.appendChild(card(mod)));
@@ -1010,9 +1041,87 @@ function sendInput(extra) {
   post('/api/input', body);
 }
 
+const KIND_FILL = {
+  audioin: '#14332a', audioout: '#1a2838', rc1: '#3b2f14', tc3: '#2a1f38',
+  neuron: '#331e2a', vcf: '#1a2e33', vca: '#1a2a22', vco: '#2a2418',
+  mix: '#1b2028', env: '#2a2218', noise: '#222', source: '#1f2430'
+};
+
+function drawMap(map) {
+  const wrap = $('mapwrap');
+  const host = $('mapscroll');
+  if (!map || !map.nodes || !map.nodes.length) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  $('mapstat').textContent = map.nodes.length + ' modules · ' +
+    (map.cables || []).length + ' cables';
+  const BOX_W = 120, BOX_H = 34, COL = 168, ROW = 48, PAD = 14;
+  const cols = map.nodes.reduce((m, n) => Math.max(m, n.col), 0) + 1;
+  const rows = map.nodes.reduce((m, n) => Math.max(m, n.row), 0) + 1;
+  const width = PAD * 2 + cols * COL;
+  const height = PAD * 2 + rows * ROW;
+  const at = (i) => {
+    const n = map.nodes.find(x => x.index === i) || { col: 0, row: 0 };
+    return [PAD + n.col * COL, PAD + n.row * ROW];
+  };
+  let svg = '<svg class="map" width="' + width + '" height="' + height +
+    '" viewBox="0 0 ' + width + ' ' + height +
+    '" xmlns="http://www.w3.org/2000/svg">';
+  svg += '<defs><marker id="tip" viewBox="0 0 8 8" refX="7" refY="4" \
+markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" \
+fill="#4b5563"/></marker></defs>';
+  (map.cables || []).forEach(c => {
+    const [x0, y0] = at(c.from);
+    const [x1, y1] = at(c.to);
+    const sx = x0 + BOX_W, sy = y0 + BOX_H / 2;
+    const ex = x1, ey = y1 + BOX_H / 2;
+    const bow = c.feedback ? -26 : 0;
+    const curve = Math.max(28, Math.abs(ex - sx) * 0.4);
+    const title = (map.nodes[c.from] ? map.nodes[c.from].name : c.from) + '.' +
+      c.from_jack + ' → ' + (map.nodes[c.to] ? map.nodes[c.to].name : c.to) +
+      '.' + c.to_jack;
+    svg += '<path d="M' + sx + ',' + sy + ' C' + (sx + curve) + ',' + (sy + bow) +
+      ' ' + (ex - curve) + ',' + (ey + bow) + ' ' + ex + ',' + ey +
+      '" class="cable' + (c.feedback ? ' feedback' : '') +
+      '" marker-end="url(#tip)"><title>' + title + '</title></path>';
+  });
+  map.nodes.forEach(n => {
+    const [x, y] = at(n.index);
+    const fill = KIND_FILL[n.kind] || '#1b2028';
+    svg += '<g data-bank="' + n.bank + '" data-index="' + n.index + '">';
+    svg += '<rect class="module" x="' + x + '" y="' + y + '" width="' + BOX_W +
+      '" height="' + BOX_H + '" rx="6" fill="' + fill + '"/>';
+    svg += '<text class="label" x="' + (x + 8) + '" y="' + (y + 14) + '">' +
+      n.name + '</text>';
+    svg += '<text class="kind" x="' + (x + 8) + '" y="' + (y + 27) + '">' +
+      n.kind + '</text></g>';
+  });
+  svg += '</svg>';
+  host.innerHTML = svg;
+  host.dataset.drawn = '1';
+  host.querySelectorAll('g[data-bank]').forEach(g => {
+    g.addEventListener('click', () => focusBank(g.dataset.bank));
+  });
+}
+
+function focusBank(bank) {
+  document.querySelectorAll('svg.map .module').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('svg.map g[data-bank="' + CSS.escape(bank) + '"] .module')
+    .forEach(el => el.classList.add('on'));
+  document.querySelectorAll('.card').forEach(el => el.classList.remove('focus'));
+  const card = document.getElementById('card-' + bank);
+  if (card) {
+    card.classList.add('focus');
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
 function card(mod) {
   const el = document.createElement('section');
   el.className = 'card';
+  el.id = 'card-' + mod.name;
   const title = document.createElement('h2');
   title.textContent = mod.count > 1 ? mod.name + '[' + mod.count + ']' : mod.name;
   const kind = document.createElement('div');
@@ -1188,7 +1297,23 @@ mod tests {
         assert!(json.contains("\"taper\":\"log\""));
         assert!(json.contains("\"elapsed\":1.5"));
         assert!(json.contains("\"available\":false"));
+        assert!(json.contains("\"map\":"));
+        assert!(json.contains("\"from_jack\""));
+        assert!(!s.map.nodes.is_empty());
+        assert!(!s.map.cables.is_empty());
         assert!(!json.contains("NaN"));
+    }
+
+    #[test]
+    fn duet_carries_a_map_of_every_module() {
+        let text = std::fs::read_to_string("patches/duet.kpatch").unwrap();
+        let built = patch::parse(&text).unwrap().build().unwrap();
+        let s = Surface::from_built("patches/duet.kpatch", "test", 0.3, &built);
+        assert!(s.input.available);
+        assert!(s.map.nodes.len() >= 40, "nodes={}", s.map.nodes.len());
+        assert!(s.map.cables.len() >= 40, "cables={}", s.map.cables.len());
+        assert!(s.map.nodes.iter().any(|n| n.kind == "audioin"));
+        assert!(s.map.cables.iter().any(|c| c.feedback));
     }
 
     #[test]
@@ -1252,6 +1377,9 @@ mod tests {
         assert!(PAGE.contains("id=\"indevice\""));
         assert!(PAGE.contains("id=\"inchannel\""));
         assert!(PAGE.contains("id=\"inpeak\""));
+        assert!(PAGE.contains("id=\"mapwrap\""));
+        assert!(PAGE.contains("drawMap"));
+        assert!(PAGE.contains("focusBank"));
     }
 
     #[test]

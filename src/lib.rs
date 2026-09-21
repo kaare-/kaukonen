@@ -7,6 +7,7 @@
 pub mod audio;
 #[cfg(feature = "realtime")]
 pub mod backend;
+pub mod diagram;
 pub mod engine;
 pub mod integrate;
 pub mod module;

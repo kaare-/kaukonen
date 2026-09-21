@@ -1,21 +1,19 @@
-# Two voices in one rack: the cells are always playing, and a microphone
-# (or a file) walks in and teaches the connectome. They share a memory and
-# a pair of filters. With no mic you still hear the room. With a mic the
-# two voices start to colour each other.
+# A large session with two voices: the cells are always playing, and a
+# microphone (or a file) walks in and teaches the connectome.
 #
-# Eight mismatched RC-1 cells are the internal source, mixed in two choirs,
-# lightly coupled back through the connectome, and filtered. A VCO sits
-# under them, FM'd by one cell; a little pink noise is the floor. The mic
-# has its own filter and a VCA that only opens when something is arriving.
+# Twelve mismatched RC-1 cells at an audible rate are the room, mixed in
+# three choirs. Four slower cells underneath are the pulse — they fire
+# hits and tug a second oscillator. A four-neuron layer reads slices of
+# both banks into a second memory (cortex). BCM still watches the mic.
+# Three filters: the room, the air (mic), and the dirt (the two VCOs).
 # Left leans internal, right leans mic.
 #
-# BCM watches a compressed mic, its envelope, and a read of the internal
-# voice. Inputs are kept small: the rule tracks the square of its output,
-# and audio at full Eurorack level would pin the end stops. A trickle of
-# ACTIVITY keeps the memory turning over when the room is empty; the mic
-# envelope adds real learning when someone is there.
+# With no mic you still hear the room. With a mic the two voices start
+# to colour each other. The live page draws the whole patch; click a
+# module to reach its knobs.
 #
-#   kaukonen play --patch patches/duet.kpatch --block 256 --gain 0.3
+#   kaukonen play --patch patches/duet.kpatch --block 512 --gain 0.3
+#   (raise --block if `late` climbs; 256 is tight on this rack)
 #   then Capture on the page, or `input on` at the console.
 #
 #   kaukonen render --patch patches/duet.kpatch --in your.wav \
@@ -24,15 +22,16 @@
 # Things worth turning first:
 #
 #   set cells.rate 80          # 40 is a slow pulse, 400 is a pitched tone
-#   set cells.bias 2.6         # near 3.2 the bank goes chaotic
-#   set cells.noise 0.06
-#   set room.cutoff 700        # internal filter
-#   set air.cutoff 2400        # mic filter
+#   set pulse.rate 20          # the rhythm bank
+#   set cells.bias 2.6         # near 3.2 the audible bank goes chaotic
+#   set room.cutoff 700
+#   set air.cutoff 2400
+#   set dirt.resonance 1.05    # the oscillator path starts to sing
 #   set roomamp.gain 0.55      # how loud the room is with no one talking
 #   set adc.gain 2.0           # mic sensitivity
-#   set body.a2 0.25           # more oscillator under the cells
 #   set osc.tune 55
-#   set brain.rule oja         # try bcm, anti_hebbian, three_factor, stdp
+#   set thin.tune 147
+#   set brain.rule oja
 #   set fan.a0 0.12            # how hard the connectome pushes the bank
 #   gain 0.4
 
@@ -42,99 +41,154 @@ seconds 6
 seed 19
 mismatch 0.045
 
-module adc     audioin   gain=1.6 env_rate=16
-module cells   rc1[8]    preset=burst rate=180 noise=0.015 output_gain=2
-module hear    neuron    w0=0.45 w1=0.35 leak=14 gain=3 response=0.7
-module feel    neuron    w0=0.4 w1=0.3 bias=0.1 leak=9 gain=3.5 response=0.65
-module brain   tc3       rule=bcm theta_rate=3 natural_decay=0.2 scaling=2.5 target_norm=0.95 activity_gain=2.2 w_max=1.5 w_min=-1.5
-module choir   mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
-module choir2  mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
-module body    mix       a0=0.75 a1=0.75 a2=0.12 a3=0.07 level=0.8
-module teach   mix       a0=0.32 a1=0.12 a2=0 a3=0
-module decay   source    shape=dc volts=0.12
-module sense   mix       a0=0.22 a1=0 a2=0 a3=0
-module open    mix       a0=2 a1=0 a2=0 a3=0 level=4
-module lift    mix       a0=1.1 a1=0.35 a2=0 a3=0 offset=1.0 level=0.7
-module pace    mix       a0=0.35 a1=0 a2=0 a3=0
-module fan     mix       a0=0.05 a1=0 a2=0 a3=0
-module swell   mix       a0=0.55 a1=0.25 a2=0 a3=0
-module left    mix       a0=1.0 a1=0.4 a2=0 a3=0 level=0.9
-module right   mix       a0=0.4 a1=1.0 a2=0 a3=0 level=0.9
-module hiss    noise     level=1.1
-module drum    env       mode=ad attack=0.003 decay=0.2 threshold=1.55
-module osc     vco       tune=73 fm_depth=36 level=3.2
-module room    vcf       cutoff=880 resonance=0.38 cv_depth=0.75 res_depth=0.07 drive=1.35
-module air     vcf       cutoff=1700 resonance=0.22 cv_depth=1.0 res_depth=0.1 drive=1.15
-module roomamp vca       response=exponential gain=0.38 cv_depth=0.55
-module micamp  vca       response=linear gain=0.0 cv_depth=1.4
-module dac     audioout  rate=48000 level=0.45
+module adc      audioin   gain=1.6 env_rate=16
+module cells    rc1[12]   preset=burst rate=180 noise=0.015 output_gain=2
+module pulse    rc1[4]    preset=burst rate=42 noise=0.02 output_gain=2.2
+module layer    neuron[4] w0=0.5 w1=0.28 leak=10 gain=3.2 response=0.7
+module hear     neuron    w0=0.45 w1=0.35 leak=14 gain=3 response=0.7
+module feel     neuron    w0=0.4 w1=0.3 bias=0.1 leak=9 gain=3.5 response=0.65
+module see      neuron    w0=0.4 w1=0.35 leak=8 gain=3.2 response=0.7
+module brain    tc3       rule=bcm theta_rate=3 natural_decay=0.2 scaling=2.5 target_norm=0.95 activity_gain=2.2 w_max=1.5 w_min=-1.5
+module cortex   tc3       rule=oja gamma=0.55 scaling=0.7 target_norm=1.1 activity_gain=0.12
+module choir    mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
+module choir2   mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
+module choir3   mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.85
+module body     mix       a0=0.55 a1=0.55 a2=0.55 a3=0.22 level=0.8
+module pulsebox mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
+module tones    mix       a0=0.7 a1=0.45 a2=0 a3=0 level=0.85
+module teach    mix       a0=0.32 a1=0.12 a2=0 a3=0
+module sense    mix       a0=0.22 a1=0 a2=0 a3=0
+module open     mix       a0=2 a1=0 a2=0 a3=0 level=4
+module lift     mix       a0=1.1 a1=0.35 a2=0 a3=0 offset=1.0 level=0.7
+module pace     mix       a0=0.35 a1=0 a2=0 a3=0
+module pace2    mix       a0=0.3 a1=0 a2=0 a3=0
+module fan      mix       a0=0.045 a1=0 a2=0 a3=0
+module tug      mix       a0=0.06 a1=0 a2=0 a3=0
+module swell    mix       a0=0.5 a1=0.22 a2=0 a3=0
+module hitmix   mix       a0=0.7 a1=0.25 a2=0 a3=0
+module left     mix       a0=1.0 a1=0.35 a2=0.2 a3=0 level=0.9
+module right    mix       a0=0.35 a1=1.0 a2=0.2 a3=0 level=0.9
+module decay    source    shape=dc volts=0.12
+module hiss     noise     level=1.0
+module drum     env       mode=ad attack=0.003 decay=0.2 threshold=1.55
+module hit      env       mode=ad attack=0.002 decay=0.14 threshold=1.5
+module osc      vco       tune=73 fm_depth=36 level=3.2
+module thin     vco       tune=196 fm_depth=18 width=0.42 pwm_depth=0.1 level=2.8
+module room     vcf       cutoff=880 resonance=0.38 cv_depth=0.75 res_depth=0.07 drive=1.35
+module air      vcf       cutoff=1700 resonance=0.22 cv_depth=1.0 res_depth=0.1 drive=1.15
+module dirt     vcf       cutoff=620 resonance=0.85 cv_depth=0.9 res_depth=0.08 drive=1.5
+module roomamp  vca       response=exponential gain=0.36 cv_depth=0.55
+module micamp   vca       response=linear gain=0.0 cv_depth=1.4
+module dirtamp  vca       response=exponential gain=0.12 cv_depth=0.7
+module dac      audioout  rate=48000 level=0.4
 
-# Two choirs of four, then a bed of oscillator and pink noise.
-patch cells[0].out -> choir.in0
-patch cells[1].out -> choir.in1
-patch cells[2].out -> choir.in2
-patch cells[3].out -> choir.in3
-patch cells[4].out -> choir2.in0
-patch cells[5].out -> choir2.in1
-patch cells[6].out -> choir2.in2
-patch cells[7].out -> choir2.in3
-patch choir.out    -> body.in0
-patch choir2.out   -> body.in1
-patch osc.saw      -> body.in2
-patch hiss.pink    -> body.in3
+# Three choirs of four, then a bed of dirt and pink noise.
+patch cells[0].out  -> choir.in0
+patch cells[1].out  -> choir.in1
+patch cells[2].out  -> choir.in2
+patch cells[3].out  -> choir.in3
+patch cells[4].out  -> choir2.in0
+patch cells[5].out  -> choir2.in1
+patch cells[6].out  -> choir2.in2
+patch cells[7].out  -> choir2.in3
+patch cells[8].out  -> choir3.in0
+patch cells[9].out  -> choir3.in1
+patch cells[10].out -> choir3.in2
+patch cells[11].out -> choir3.in3
+patch choir.out     -> body.in0
+patch choir2.out    -> body.in1
+patch choir3.out    -> body.in2
+patch dirtamp.out   -> body.in3
 
-# One cell fires a pluck; another bends the oscillator.
-patch cells[0].out -> drum.gate
+patch pulse[0].out -> pulsebox.in0
+patch pulse[1].out -> pulsebox.in1
+patch pulse[2].out -> pulsebox.in2
+patch pulse[3].out -> pulsebox.in3
+
+# Two oscillators: one FM'd by an audible cell, one PWM'd by the pulse.
 patch cells[2].out -> pace.in0
 patch pace.out     -> osc.fm
+patch pulse[1].out -> pace2.in0
+patch pace2.out    -> thin.pwm
+patch osc.saw      -> tones.in0
+patch thin.pulse   -> tones.in1
+patch tones.out    -> dirt.in
+patch hiss.pink    -> dirt.res_cv
 
-# The connectome sees a compressed mic, its envelope, and a read of the room.
-patch adc.out      -> hear.in0
-patch adc.env      -> hear.in1
-patch cells[5].out -> feel.in0
-patch brain.activity -> feel.in1
-patch hear.out     -> brain.a
-patch adc.env      -> sense.in0
-patch sense.out    -> brain.b
-patch feel.out     -> brain.c
+# The neuron layer reads four slices of the two banks.
+patch cells[0].out  -> layer[0].in0
+patch cells[4].out  -> layer[1].in0
+patch cells[8].out  -> layer[2].in0
+patch pulse[0].out  -> layer[3].in0
+patch pulse[i].out  -> layer[i].in1
 
-# Learning: a trickle from ACTIVITY, more when the mic envelope rises.
-# Forgetting is always on, so a later burst still finds something to move.
+# Hits: one cell plucks the room, one pulse plucks the dirt.
+patch cells[0].out -> drum.gate
+patch pulse[0].out -> hit.gate
+
+# BCM watches a compressed mic, its envelope, and a read of the room.
+patch adc.out          -> hear.in0
+patch adc.env          -> hear.in1
+patch cells[5].out     -> feel.in0
+patch brain.activity   -> feel.in1
+patch pulsebox.out     -> see.in0
+patch cortex.activity  -> see.in1
+patch hear.out         -> brain.a
+patch adc.env          -> sense.in0
+patch sense.out        -> brain.b
+patch feel.out         -> brain.c
+
+# Cortex watches the layer. It learns from its own motion.
+patch layer[0].out     -> cortex.a
+patch layer[1].out     -> cortex.b
+patch layer[2].out     -> cortex.c
+patch see.out          -> cortex.learn
+patch cortex.activity  -> cortex.learn
+patch decay.out        -> cortex.forget
+
+# Learning on the mic side: a trickle from ACTIVITY, more when someone is there.
 patch adc.env          -> teach.in0
 patch brain.activity   -> teach.in1
 patch teach.out        -> brain.learn
 patch decay.out        -> brain.forget
 
-# Weak coupling back into the whole bank, so the memory can gather them.
+# Weak coupling: brain into the audible bank, cortex into the pulse bank.
 patch brain.a  -> fan.in0
 patch fan.out  -> cells[*].in
+patch cortex.a -> tug.in0
+patch tug.out  -> pulse[*].in
 
-# Timbre: the connectome and one cell sweep both filters; ACTIVITY
-# pushes resonance. The internal VCA stays a little open; the mic VCA
-# only opens when something is arriving.
+# Timbre. ACTIVITY and the hits open the VCAs; the memories sweep cutoffs.
 patch brain.a          -> lift.in0
 patch cells[3].out     -> lift.in1
 patch lift.out         -> room.cutoff_cv
 patch lift.out         -> air.cutoff_cv
+patch cortex.a         -> dirt.cutoff_cv
 patch brain.activity   -> room.res_cv
 patch brain.activity   -> air.res_cv
 patch drum.out         -> swell.in0
 patch brain.activity   -> swell.in1
 patch swell.out        -> roomamp.cv
+patch hit.out          -> hitmix.in0
+patch pulsebox.out     -> hitmix.in1
+patch hitmix.out       -> dirtamp.cv
 patch adc.env          -> open.in0
 patch open.out         -> micamp.cv
 
-patch body.out   -> room.in
-patch room.out   -> roomamp.in
-patch adc.out    -> air.in
-patch air.out    -> micamp.in
+patch body.out    -> room.in
+patch room.out    -> roomamp.in
+patch adc.out     -> air.in
+patch air.out     -> micamp.in
+patch dirt.out    -> dirtamp.in
 
-# Left leans on the room, right leans on the mic.
+# Left leans on the room, right leans on the mic; both take a little dirt.
 patch roomamp.out -> left.in0
 patch micamp.out  -> left.in1
+patch dirtamp.out -> left.in2
 patch roomamp.out -> right.in0
 patch micamp.out  -> right.in1
+patch dirtamp.out -> right.in2
 patch left.out    -> dac.left
 patch right.out   -> dac.right
 
-record adc.out adc.env cells[0].v cells[4].v brain.norm brain.activity room.cutoff air.cutoff roomamp.gain micamp.gain
+record adc.out adc.env cells[0].v pulse[0].v layer[0].v brain.norm cortex.norm brain.activity room.cutoff dirt.cutoff roomamp.gain micamp.gain
