@@ -99,13 +99,17 @@ rendered audio embedded so you can play it.
 
 ## Patches
 
-| patch | what it shows |
-| --- | --- |
-| [`demo.kpatch`](patches/demo.kpatch) | The original small recurrent rack: stimulus, TC-3, two neurons, two cells, feedback. |
-| [`voice.kpatch`](patches/voice.kpatch) | A percussive voice whose rhythm is RC-1 bursting. |
-| [`chaos.kpatch`](patches/chaos.kpatch) | Two cells cross-coupled in their chaotic window. `probe` this one. |
-| [`bank64.kpatch`](patches/bank64.kpatch) | Sixty-four mismatched cells weakly coupled through a changing connectome. |
-| [`listen.kpatch`](patches/listen.kpatch) | Recorded sound teaching a connectome, which colours it back. Needs `--in`. |
+| patch | what it shows | audio |
+| --- | --- | --- |
+| [`live.kpatch`](patches/live.kpatch) | Three cells at an audible rate are the whole sound source. Written for `play`, with the knobs worth turning listed in its comments. | yes |
+| [`voice.kpatch`](patches/voice.kpatch) | A percussive voice whose rhythm is RC-1 bursting. | yes |
+| [`listen.kpatch`](patches/listen.kpatch) | Recorded sound teaching a connectome, which colours it back. Needs `--in` or `--input`. | yes |
+| [`demo.kpatch`](patches/demo.kpatch) | The original small recurrent rack: stimulus, TC-3, two neurons, two cells, feedback. | no |
+| [`chaos.kpatch`](patches/chaos.kpatch) | Two cells cross-coupled in their chaotic window. `probe` this one. | no |
+| [`bank64.kpatch`](patches/bank64.kpatch) | Sixty-four mismatched cells weakly coupled through a changing connectome. | no |
+
+The last three have no `audioout`, so they render traces rather than sound. Add
+one and patch something to its `left` and `right` jacks to hear them.
 
 ## Sound
 

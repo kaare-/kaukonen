@@ -208,6 +208,7 @@ const OUT_PARAMS: &[ParamSpec] = params! {
     "level", Unit::Ratio, 0.0 ..= 2.0, 0.2, Linear, "full scale per volt; 0.2 puts 5 V at full scale";
     "rate", Unit::Hertz, 1000.0 ..= 192000.0, 48000.0, Log, "sample rate of the captured file";
     "headroom", Unit::Ratio, 0.1 ..= 4.0, 1.0, Linear, "soft-clip ceiling; the converter saturates rather than wrapping";
+    "dc_block", Unit::Hertz, 0.0 ..= 100.0, 5.0, Linear, "corner of the DC blocker; zero passes DC through";
 };
 
 /// The DAC: takes patched voltages and collects a file.
@@ -220,8 +221,11 @@ pub struct AudioOut {
     pub level: f32,
     pub rate: f32,
     pub headroom: f32,
+    pub dc_block: f32,
     left: Vec<f32>,
     right: Vec<f32>,
+    /// Running average per channel, subtracted to block DC.
+    dc: [f32; 2],
     /// Two cascaded one-poles, so the decimation filter is -12 dB/octave.
     filter: [[f32; 2]; 2],
     /// Fractional output samples owed.
@@ -244,8 +248,10 @@ impl AudioOut {
             level: 0.2,
             rate: 48000.0,
             headroom: 1.0,
+            dc_block: 5.0,
             left: Vec::new(),
             right: Vec::new(),
+            dc: [0.0; 2],
             filter: [[0.0; 2]; 2],
             phase: 0.0,
             capturing: true,
@@ -324,6 +330,7 @@ impl AnalogModule for AudioOut {
             "level" => self.level,
             "rate" => self.rate,
             "headroom" => self.headroom,
+            "dc_block" => self.dc_block,
             _ => return None,
         })
     }
@@ -335,6 +342,7 @@ impl AnalogModule for AudioOut {
             "level" => self.level = v,
             "rate" => self.rate = v,
             "headroom" => self.headroom = v,
+            "dc_block" => self.dc_block = v,
             _ => return Err(self.unknown_param(name)),
         }
         Ok(())
@@ -356,9 +364,19 @@ impl AnalogModule for AudioOut {
         let right = inputs.get(1).copied().unwrap_or(left);
         self.last = [left, right];
 
+        let mut scaled = [left * self.level, right * self.level];
+        // An analog rack settles wherever it likes, and a lowpass passes DC
+        // straight through, so a patch can easily arrive here sitting well off
+        // zero. Real outputs are AC-coupled; so is this one.
+        if self.dc_block > 0.0 {
+            for (channel, average) in self.dc.iter_mut().enumerate() {
+                *average = lowpass(*average, scaled[channel], self.dc_block, dt);
+                scaled[channel] -= *average;
+            }
+        }
+
         // Keep the anti-alias corner just under the output Nyquist.
         let corner = 0.45 * self.rate;
-        let mut scaled = [left * self.level, right * self.level];
         for (channel, poles) in self.filter.iter_mut().enumerate() {
             poles[0] = lowpass(poles[0], scaled[channel], corner, dt);
             poles[1] = lowpass(poles[1], poles[0], corner, dt);
@@ -492,27 +510,81 @@ mod tests {
         }
     }
 
+    /// Feed a sine of `amplitude` volts at `hz` for `seconds`.
+    fn tone(out: &mut AudioOut, hz: f32, amplitude: f32, dt: f32, seconds: f32) {
+        let mut phase = 0.0f32;
+        for _ in 0..(seconds / dt) as usize {
+            phase = (phase + hz * dt).fract();
+            let v = amplitude * (phase * std::f32::consts::TAU).sin();
+            out.step(&[v, v], dt);
+        }
+    }
+
     #[test]
     fn capture_is_transparent_below_the_knee_and_never_exceeds_the_ceiling() {
         let dt = 1.0 / 96_000.0;
         // 3 V at level 0.2 is 0.6 full scale, below the 0.7 knee.
         let mut clean = AudioOut::new();
         clean.set_param("rate", 48_000.0).unwrap();
-        drive(&mut clean, &[3.0, 3.0], dt, 0.05);
-        let settled = *clean.captured().samples.last().unwrap();
+        tone(&mut clean, 300.0, 3.0, dt, 0.2);
+        let peak = clean.captured().peak();
         assert!(
-            (settled - 0.6).abs() < 1e-3,
-            "quiet signal was coloured: {settled}"
+            (peak - 0.6).abs() < 0.02,
+            "quiet signal was coloured: {peak}"
         );
 
         // 20 V is far past full scale and must still land inside the ceiling.
         let mut hot = AudioOut::new();
         hot.set_param("rate", 48_000.0).unwrap();
-        drive(&mut hot, &[20.0, -20.0], dt, 0.05);
+        tone(&mut hot, 300.0, 20.0, dt, 0.2);
         let audio = hot.captured();
         assert!(audio.peak() <= 1.0, "converter exceeded full scale");
         assert!(audio.peak() > 0.9, "converter gave up too early");
         assert!(hot.peak() > 1.0, "peak meter should see the overdrive");
+    }
+
+    #[test]
+    fn a_standing_offset_is_blocked_but_the_signal_is_not() {
+        let dt = 1.0 / 96_000.0;
+        // An analog rack can sit a long way off zero, and the lowpass in front
+        // of the converter would pass all of it to the speaker.
+        let mut out = AudioOut::new();
+        out.set_param("rate", 48_000.0).unwrap();
+        drive(&mut out, &[4.0, 4.0], dt, 1.0);
+        let settled = *out.captured().samples.last().unwrap();
+        assert!(
+            settled.abs() < 0.01,
+            "a 4 V offset reached the output: {settled}"
+        );
+
+        // A tone riding on that offset must survive it.
+        let mut riding = AudioOut::new();
+        riding.set_param("rate", 48_000.0).unwrap();
+        let mut phase = 0.0f32;
+        for _ in 0..(1.0 / dt) as usize {
+            phase = (phase + 300.0 * dt).fract();
+            let v = 4.0 + 2.0 * (phase * std::f32::consts::TAU).sin();
+            riding.step(&[v, v], dt);
+        }
+        let tail: Vec<f32> = riding.captured().samples.into_iter().skip(24_000).collect();
+        let mean = tail.iter().sum::<f32>() / tail.len() as f32;
+        let peak = tail.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(mean.abs() < 0.01, "the offset came through: mean {mean}");
+        assert!((peak - 0.4).abs() < 0.03, "the tone was lost: peak {peak}");
+    }
+
+    #[test]
+    fn the_dc_blocker_can_be_switched_off() {
+        let dt = 1.0 / 96_000.0;
+        let mut out = AudioOut::new();
+        out.set_param("rate", 48_000.0).unwrap();
+        out.set_param("dc_block", 0.0).unwrap();
+        drive(&mut out, &[3.0, 3.0], dt, 0.2);
+        let settled = *out.captured().samples.last().unwrap();
+        assert!(
+            (settled - 0.6).abs() < 1e-3,
+            "offset was still removed: {settled}"
+        );
     }
 
     #[test]

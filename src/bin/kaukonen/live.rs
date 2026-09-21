@@ -224,6 +224,9 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
     };
 
     println!("rack     {module_count} modules, {cable_count} cables");
+    // The names are what the console's `set` takes, so say them up front rather
+    // than making someone type `modules` to find out what is in the rack.
+    println!("knobs on {}", directory.summary().join("  "));
     println!();
 
     let playback = backend::play(
@@ -411,6 +414,32 @@ impl Directory {
                 })
                 .collect(),
         }
+    }
+
+    /// One name per declared module, with a bank shown once rather than 64 times.
+    fn summary(&self) -> Vec<String> {
+        let mut seen: Vec<(String, usize)> = Vec::new();
+        for entry in &self.entries {
+            let bank = entry
+                .label
+                .split('[')
+                .next()
+                .unwrap_or(&entry.label)
+                .to_string();
+            match seen.iter_mut().find(|(name, _)| *name == bank) {
+                Some((_, count)) => *count += 1,
+                None => seen.push((bank, 1)),
+            }
+        }
+        seen.into_iter()
+            .map(|(name, count)| {
+                if count == 1 {
+                    name
+                } else {
+                    format!("{name}[{count}]")
+                }
+            })
+            .collect()
     }
 
     /// Instances named by `cells[2]`, or by `cells` meaning the whole bank.

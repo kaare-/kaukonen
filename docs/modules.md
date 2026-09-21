@@ -110,6 +110,7 @@ Presets: subthreshold, pulse, tonic, burst.
 | `level` | 0..2 | `0.2` | full scale per volt; 0.2 puts 5 V at full scale |
 | `rate` | 1000..192000 Hz | `48000 Hz` | sample rate of the captured file |
 | `headroom` | 0.1..4 | `1` | soft-clip ceiling; the converter saturates rather than wrapping |
+| `dc_block` | 0..100 Hz | `5 Hz` | corner of the DC blocker; zero passes DC through |
 
 ## `vco`
 

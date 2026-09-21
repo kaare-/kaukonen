@@ -265,17 +265,24 @@ mod tests {
             patch adc.out -> dac.left\npatch adc.out -> dac.right\n";
         let mut stream = Stream::new(built(text));
         assert!(stream.has_input());
-        let input = vec![0.5; 512];
+        // A tone, not a steady level: the converter blocks DC, as a real one
+        // does, so a constant would correctly vanish.
+        let rate = stream.sample_rate();
+        let mut phase = 0.0f32;
+        let mut input = vec![0.0; 512];
         let mut output = vec![0.0; 512];
-        // Settle the converter's decimation filter, then measure.
-        for _ in 0..8 {
+        let mut peak = 0.0f32;
+        for block in 0..16 {
+            for sample in input.iter_mut() {
+                phase = (phase + 200.0 / rate).fract();
+                *sample = 0.5 * (phase * std::f32::consts::TAU).sin();
+            }
             stream.process_duplex(&input, &mut output, 1);
+            if block >= 8 {
+                peak = output.iter().fold(peak, |m, s| m.max(s.abs()));
+            }
         }
-        let settled = *output.last().unwrap();
-        assert!(
-            (settled - 0.5).abs() < 0.01,
-            "half scale in gave {settled} out"
-        );
+        assert!((peak - 0.5).abs() < 0.05, "half scale in gave {peak} out");
     }
 
     #[test]
@@ -326,16 +333,21 @@ mod tests {
                 .get_mut(ModuleId(index))
                 .as_audio_in_mut()
             {
-                module.load(Audio::mono(8000, vec![0.5; 4000]));
+                let samples: Vec<f32> = (0..8000)
+                    .map(|i| 0.5 * (i as f32 / 8000.0 * 200.0 * std::f32::consts::TAU).sin())
+                    .collect();
+                module.load(Audio::mono(8000, samples));
             }
         }
         let mut output = vec![0.0; 512];
-        for _ in 0..4 {
+        let mut peak = 0.0f32;
+        for _ in 0..8 {
             stream.process(&mut output, 2);
+            peak = output.iter().fold(peak, |m, s| m.max(s.abs()));
         }
         assert!(
-            output.iter().any(|s| s.abs() > 0.4),
-            "the loaded file never reached the converter"
+            peak > 0.4,
+            "the loaded file never reached the converter (peak {peak})"
         );
     }
 

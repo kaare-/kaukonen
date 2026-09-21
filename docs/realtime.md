@@ -4,12 +4,26 @@
 cargo build --release --features realtime
 
 ./target/release/kaukonen devices
-./target/release/kaukonen play --patch patches/voice.kpatch --device scarlett --block 256
+./target/release/kaukonen play --patch patches/live.kpatch --device scarlett --block 256 --gain 0.4
 ```
 
 The simulator itself has no dependencies. Talking to hardware needs one, so it
 sits behind the `realtime` feature and nothing else in the crate touches it.
 Without the feature, `devices` and `play` tell you what to rebuild with.
+
+On Linux the build needs ALSA's headers, which are not installed by default:
+
+```bash
+sudo apt install libasound2-dev     # Debian, Ubuntu
+sudo dnf install alsa-lib-devel     # Fedora
+```
+
+macOS and Windows need nothing extra; they use CoreAudio and WASAPI.
+
+[`patches/live.kpatch`](../patches/live.kpatch) is written for this: the sound
+comes entirely from three excitable cells running at an audible rate, and its
+comments list the knobs worth turning first. Not every patch is playable —
+`play` needs an `audioout` module, and says so if there isn't one.
 
 ## Finding the interface
 
