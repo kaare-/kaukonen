@@ -1337,6 +1337,9 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.bank == "grit"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "sift"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "sand"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "poke"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "cloud"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "roomcv"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
     }

@@ -671,6 +671,49 @@ mod tests {
     }
 
     #[test]
+    fn weather_sidechain_splits_the_doors() {
+        // Room, pair and grains used to ride one swell. The sidechain
+        // should pull them apart: a grain cloud ducks the room, and
+        // the pair should not be a copy of the room.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let names = ["roomamp.gain", "pairamp.gain", "dustamp.gain", "cloud.out"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut max_door_sep = 0.0f32;
+        let mut grain_without_room = 0usize;
+        let mut room_without_grain = 0usize;
+        let mut cloud_peak = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..6000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            max_door_sep = max_door_sep.max((now[0] - now[1]).abs());
+            cloud_peak = cloud_peak.max(now[3].abs());
+            if now[2] > 0.04 && now[0] < 0.14 {
+                grain_without_room += 1;
+            }
+            if now[0] > 0.12 && now[2] < 0.05 {
+                room_without_grain += 1;
+            }
+        }
+        assert!(cloud_peak > 0.5, "the grain cloud never rose: {cloud_peak}");
+        assert!(
+            max_door_sep > 0.04,
+            "room and pair stayed locked: sep {max_door_sep}"
+        );
+        assert!(
+            grain_without_room >= 1,
+            "grains never appeared without the room: {grain_without_room}"
+        );
+        assert!(
+            room_without_grain >= 1,
+            "the room never opened without grains: {room_without_grain}"
+        );
+    }
+
+    #[test]
     fn weather_mic_steers_the_sky_not_the_speakers() {
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut dry = Stream::new(built(&text));
