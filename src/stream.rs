@@ -640,30 +640,32 @@ mod tests {
         // dust filter is just another squall VCA.
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut stream = Stream::new(built(&text));
-        let names = ["sky[0].v", "grit[0].v", "dustamp.gain", "roomamp.gain"]
+        let names = ["sky[0].v", "flake[0].out", "dustamp.gain"]
             .into_iter()
             .map(String::from)
             .collect::<Vec<_>>();
         let mut sky_rises = 0;
-        let mut grit_rises = 0;
-        let mut last = [0.0f32; 4];
-        let mut buffer = vec![0.0f32; 512 * 2];
+        let mut flake_rises = 0;
+        let mut last = [0.0f32; 3];
+        let mut buffer = vec![0.0f32; 64 * 2];
         let mut grain_peak = 0.0f32;
-        for _ in 0..200 {
+        // 64-frame blocks so an 8–30 ms flake is several samples, not one
+        // missed edge in a 512-frame window.
+        for _ in 0..1600 {
             stream.process(&mut buffer, 2);
             let now = stream.engine_mut().snapshot_sample(&names);
             if last[0] < 0.8 && now[0] >= 0.8 {
                 sky_rises += 1;
             }
-            if last[1] < 0.8 && now[1] >= 0.8 {
-                grit_rises += 1;
+            if last[1] < 0.5 && now[1] >= 0.5 {
+                flake_rises += 1;
             }
             grain_peak = grain_peak.max(now[2].abs());
-            last = [now[0], now[1], now[2], now[3]];
+            last = [now[0], now[1], now[2]];
         }
         assert!(
-            grit_rises > sky_rises,
-            "grains no finer than the sky: grit {grit_rises} sky {sky_rises}"
+            flake_rises > sky_rises,
+            "grains no finer than the sky: flake {flake_rises} sky {sky_rises}"
         );
         assert!(grain_peak > 0.05, "the dust VCA never opened: {grain_peak}");
     }
