@@ -231,6 +231,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
             let pretty: Vec<&str> = names
                 .iter()
                 .map(|n| match n.as_str() {
+                    "ear" => "ear",
                     "split" => "mic split",
                     "band" => "output band",
                     "miclim" => "limiter",

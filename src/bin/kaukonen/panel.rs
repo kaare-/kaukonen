@@ -155,8 +155,9 @@ pub fn patch_has_audioin(built: &BuiltPatch) -> bool {
 /// Knobs a weather-like rack should keep at the top even without a `desk` line.
 fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
     const WANTED: &[(&str, &str)] = &[
-        ("split", "cutoff"),
-        ("split", "q"),
+        ("ear", "q"),
+        ("ear", "tilt"),
+        ("ear", "follow"),
         ("band", "cutoff"),
         ("band", "q"),
         ("miclim", "threshold"),
@@ -1049,13 +1050,13 @@ function render(state) {
 }
 
 const DESK_LABEL = {
-  split: 'mic split', band: 'output band', miclim: 'limiter',
+  ear: 'ear', split: 'mic split', band: 'output band', miclim: 'limiter',
   ava: 'retreat', avb: 'advance', pharynx: 'pharynx', hymn: 'hymn',
   throat: 'throat', call: 'call', body: 'body',
   fbank: 'filter bank', verb: 'room', outcomp: 'compressor'
 };
 const DESK_FALLBACK = [
-  ['split', 'cutoff'], ['split', 'q'],
+  ['ear', 'q'], ['ear', 'tilt'], ['ear', 'follow'],
   ['band', 'cutoff'], ['band', 'q'],
   ['miclim', 'threshold'], ['miclim', 'ratio'],
   ['ava', 'bias'], ['avb', 'bias'],
@@ -1229,6 +1230,7 @@ function sendInput(extra) {
 const KIND_FILL = {
   audioin: '#14332a', audioout: '#1a2838', rc1: '#3b2f14', tc3: '#2a1f38',
   neuron: '#331e2a', vcf: '#1a2e33', svf: '#1a2e33', fbank: '#1a2e33',
+  cochlea: '#1a2e33',
   verb: '#242018', comp: '#1a2420', vca: '#1a2a22', vco: '#2a2418',
   mix: '#1b2028', env: '#2a2218', noise: '#222', source: '#1f2430'
 };
@@ -1542,11 +1544,13 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.bank == "body"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "stretch"));
         assert!(s.map.nodes.iter().any(|n| n.name == "miclim"));
-        assert!(s.map.nodes.iter().any(|n| n.name == "split"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "ear"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "tide"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
-        assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
+        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s
             .desk
@@ -1563,7 +1567,7 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
         let json = s.to_json("");
         assert!(json.contains("\"desk\":["));
-        assert!(json.contains("\"module\":\"split\""));
+        assert!(json.contains("\"module\":\"ear\""));
     }
 
     #[test]
@@ -1577,7 +1581,7 @@ mod tests {
         let built = patch::parse(&text).unwrap().build().unwrap();
         assert!(built.desk.is_empty());
         let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
-        assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s
             .desk
@@ -1602,12 +1606,12 @@ mod tests {
         let base = url(panel.addr);
         let page = get(&format!("{base}/"));
         assert!(page.contains("id=\"deskwrap\""), "{page}");
-        assert!(page.contains("mic split"), "{page}");
+        assert!(page.contains("ear"), "{page}");
         assert!(page.contains("filter bank"), "{page}");
         assert!(page.contains("retreat"), "{page}");
         assert!(page.contains("throat"), "{page}");
         let state = get(&format!("{base}/api/state"));
-        assert!(state.contains("\"module\":\"split\""), "{state}");
+        assert!(state.contains("\"module\":\"ear\""), "{state}");
         assert!(state.contains("\"module\":\"throat\""), "{state}");
         assert!(state.contains("\"module\":\"call\""), "{state}");
         assert!(state.contains("\"module\":\"body\""), "{state}");
@@ -1616,7 +1620,7 @@ mod tests {
         assert!(state.contains("\"module\":\"outcomp\""), "{state}");
         let response = post(
             &format!("{base}/api/set"),
-            r#"{"module":"split","knob":"cutoff","value":700}"#,
+            r#"{"module":"ear","knob":"q","value":2}"#,
         );
         assert!(response.contains("\"ok\":true"), "{response}");
         panel.stop.store(true, Ordering::Relaxed);

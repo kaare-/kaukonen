@@ -1097,24 +1097,68 @@ mod tests {
         // a sibilant should do the opposite. Those envelopes are how the
         // three bands reach different parts of the climate.
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
-        let names = ["micenv[0].out", "micenv[2].out"]
+        let names = ["ear.rumble", "ear.air"]
             .into_iter()
             .map(String::from)
             .collect::<Vec<_>>();
         let mut low = Stream::new(built(&text));
-        drive_tone(&mut low, 180.0, 0.55, 80);
+        drive_tone(&mut low, 90.0, 0.55, 100);
         let low_env = low.engine_mut().snapshot_sample(&names);
         let mut high = Stream::new(built(&text));
-        drive_tone(&mut high, 3500.0, 0.55, 80);
+        drive_tone(&mut high, 6500.0, 0.55, 100);
         let high_env = high.engine_mut().snapshot_sample(&names);
         assert!(
             low_env[0] > low_env[1] + 0.15,
-            "a low tone did not prefer the low band: {low_env:?}"
+            "a low tone did not prefer rumble: {low_env:?}"
         );
         assert!(
             high_env[1] > high_env[0] + 0.15,
-            "a high tone did not prefer the high band: {high_env:?}"
+            "a high tone did not prefer air: {high_env:?}"
         );
+    }
+
+    #[test]
+    fn weather_has_a_cochlea_and_a_tide() {
+        // Six hairs and a minute-scale pair. If those are missing the
+        // mic is a three-way split again and a half-hour pass repeats.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        let kinds: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.get(ModuleId(i)).kind_name())
+            .collect();
+        assert!(kinds.iter().any(|k| *k == "cochlea"), "{kinds:?}");
+        assert!(labels.iter().any(|n| n == "ear"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "tide[0]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "season"), "{labels:?}");
+        assert!(
+            !labels.iter().any(|n| n.starts_with("micenv")),
+            "{labels:?}"
+        );
+        assert!(!labels.iter().any(|n| n == "split"), "{labels:?}");
+        let mut stream = Stream::new(built);
+        let names = ["tide[0].v", "tide[1].v", "ear.place"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut t0_lo = f32::MAX;
+        let mut t0_hi = f32::MIN;
+        let mut spread = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..8000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            t0_lo = t0_lo.min(now[0]);
+            t0_hi = t0_hi.max(now[0]);
+            spread = spread.max((now[0] - now[1]).abs());
+        }
+        assert!(
+            t0_hi - t0_lo > 0.25,
+            "the tide never wandered: {t0_lo} .. {t0_hi}"
+        );
+        assert!(spread > 0.15, "tide cells stayed locked: {spread}");
     }
 
     #[test]

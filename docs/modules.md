@@ -195,6 +195,27 @@ Presets: subthreshold, pulse, tonic, burst.
 | `mix` | 0..1 | `1` | dry/wet; 1 is the bank alone |
 | `level` | 0..4 | `1` | output scale |
 
+## `cochlea`
+
+- inputs: `in`, `tilt_cv`
+- outputs: `rumble`, `chest`, `formant`, `speech`, `hiss`, `air`, `place`, `loud`
+- states: `rumble`, `chest`, `formant`, `speech`, `hiss`, `air`, `place`, `loud`
+
+Six log-spaced hair cells (80 / 200 / 500 / 1.2k / 3k / 7k Hz). Each jack is a
+place-coded envelope, not audio — a microphone can current-drive different
+nerves without sitting on the speakers. Low hairs follow more slowly. A little
+lateral inhibition keeps a tone from lighting every neighbor. `place` is the
+centroid (0–5 V); `loud` is the mean.
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `q` | 0.6..6 | `1.55` | selectivity of each hair cell |
+| `tilt` | -2..2 | `0` | lows vs highs; + lifts the air |
+| `tilt_depth` | -2..2 | `0.2` | how hard TILT CV leans the ear |
+| `inhibit` | 0..0.6 | `0.14` | neighbor subtraction |
+| `follow` | 0.008..0.8 s | `0.07 s` | base follow at 500 Hz; lower bands are slower |
+| `level` | 0..8 V | `5 V` | envelope scale |
+
 ## `verb`
 
 - inputs: `in`, `time_cv`, `decay_cv`

@@ -6,6 +6,7 @@
 //! here is a conventional analog building block with no plasticity, no
 //! excitability, and nothing to discover.
 
+pub mod cochlea;
 pub mod comp;
 pub mod env;
 pub mod fbank;
@@ -17,6 +18,7 @@ pub mod vcf;
 pub mod vco;
 pub mod verb;
 
+pub use cochlea::Cochlea;
 pub use comp::Comp;
 pub use env::Env;
 pub use fbank::Fbank;

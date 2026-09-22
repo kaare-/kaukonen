@@ -31,8 +31,10 @@
 # sings in the holes, lifts the grains, and FM's the plucked tone.
 # Body stretch — followers on the weather bed and the pair — coils
 # back into the command cells and the sky, so the sound of the rack
-# is also a proprioceptive input. The climate is a small nervous
-# system that hears itself.
+# is also a proprioceptive input. A two-cell tide wanders on a
+# minute scale and leans the sky, the chest and the room, so a
+# half-hour pass is not the first two minutes played six times.
+# The climate is a small nervous system that hears itself.
 #
 # A wide state-variable bandpass sits on the stereo mix at the end. The
 # climate walks its centre; a grain cloud briefly peaks the Q. It is a
@@ -50,14 +52,18 @@
 # A small room — short pre-delay into four combs and two allpasses —
 # sits after the bank, before the compressor. It is a closet, not a hall.
 #
-# The microphone is limited, then split by a state-variable cell into
-# low, mid and high. Those bands never reach the converter: their
-# envelopes steer different parts of the climate. Low turns the sky,
-# mid leans on the rain and the ring, high tickles the grit clocks.
+# The microphone is limited, then a six-hair cochlea place-codes it.
+# Rumble turns the sky, chest current-drives the rain, formant walks
+# the ring and the pair, speech teaches the memories, hiss FM's the
+# call and the grit clocks, air tilts the bank. Place and loudness
+# join the tide. Those bands never reach the converter.
 # A tunable compressor sits on the stereo mix after the room.
-# The live page desk pins the mic split, the output band, the command
+# The live page desk pins the ear, the output band, the command
 # pair, the pharynx, the throat, the call, the body, the filter bank,
 # the room, the limiter and the compressor.
+#
+# Leave it running. The tide and the slow sky are meant for a
+# thirty-minute ambient pass, not a two-minute demonstration.
 #
 #   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
 #   (256 is often fine; raise --block if `late` climbs)
@@ -69,8 +75,9 @@
 # Things worth turning first:
 #
 #   set sky.bias 2.4          # 1.8 is a long drought, 2.6 is almost always raining
-#   set sky.rate 4            # how slowly the climate turns; cells are staggered
-#   set sky.drift 0.22        # wander that puts a cell in and out of bursting
+#   set sky.rate 2            # how slowly the climate turns; cells are staggered
+#   set sky.drift 0.34        # wander that puts a cell in and out of bursting over minutes
+#   set tide.bias 2.1         # the minute-scale pair; higher occupies the season
 #   set rain.bias 1.35        # the audible bank; keep it hungry so it needs the sky
 #   set rain.rate 200
 #   set fan.a0 0.16           # how hard a squall current-drives the rain
@@ -102,7 +109,9 @@
 #   set band.cutoff 600       # centre of the final window; 400 is dark, 1600 is thin
 #   set band.q 0.45           # 0.4 is a large band, 2 is a wah
 #   set bandcv.a0 0.28        # how far sand walks the band
-#   set split.cutoff 700      # mic crossover; lower puts more speech into the sky
+#   set ear.q 1.6             # hair-cell selectivity; 0.8 is wide, 3 is a peak
+#   set ear.tilt -0.4         # − leans rumble into the sky, + leans air into the grit
+#   set ear.follow 0.12       # how slowly the hairs track; rumble is slower still
 #   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
 #   set throat.cutoff 200     # growl; hymn opens it. 80 is a chest, 500 is a cry
 #   set call.cutoff 280       # the plucked mouth; 150 is a moan, 800 is a chirp
@@ -123,7 +132,8 @@ oversample 2
 seconds 12
 seed 23
 mismatch 0.06
-desk split.cutoff split.q band.cutoff band.q
+desk ear.q ear.tilt ear.follow
+desk band.cutoff band.q
 desk miclim.threshold miclim.ratio
 desk ava.bias avb.bias pharynx.bias pharynx.rate hymn.decay
 desk throat.cutoff call.cutoff body.cutoff
@@ -133,10 +143,11 @@ desk outcomp.threshold outcomp.ratio outcomp.attack outcomp.release
 
 module adc      audioin   gain=1.5 env_rate=10
 module miclim   comp      threshold=1.05 ratio=20 attack=0.0004 release=0.08 knee=0.15 makeup=1 mix=1
-module split    svf       cutoff=850 q=0.52 drive=1.1 level=1.0
-module micenv   env[3]    mode=follow attack=0.012 decay=0.16 level=5
-module sky      rc1[4]    preset=burst rate=5 noise=0.04 drift=0.26 bias=2.08 output_gain=2.3 adaptation_rate=0.01
-module rain     rc1[6]    preset=burst rate=170 noise=0.02 bias=1.40 output_gain=2
+module ear      cochlea   q=1.55 tilt=0.0 inhibit=0.14 follow=0.08 level=5
+module sky      rc1[4]    preset=burst rate=2.4 noise=0.04 drift=0.34 bias=2.02 output_gain=2.3 adaptation_rate=0.0045
+module tide     rc1[2]    preset=subthreshold leak=0 adaptation_rate=0.0016 bias=2.06 rate=0.22 output_gain=1.55 drift=0.38 noise=0.03
+module season   mix       a0=0.055 a1=0.045 a2=0.04 a3=0.03
+module rain     rc1[6]    preset=burst rate=150 noise=0.02 bias=1.38 output_gain=2
 module ring     rc1[4]    preset=burst rate=64 noise=0.02 bias=1.7 output_gain=2
 module hops     mix[4]    a0=0.11 a1=0.1 a2=0.04 a3=0.07
 module a        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.18 rate=58 output_gain=2.2
@@ -163,7 +174,7 @@ module bed      mix       a0=0.7 a1=0.4 level=0.85
 module cross    mix       a0=0.32 a1=-0.32 a2=0 a3=0
 module teach    mix       a0=0.3 a1=0.12 a2=0.1 a3=0
 module sense    mix       a0=0.2 a1=0 a2=0 a3=0
-module fan      mix       a0=0.16 a1=0.1 a2=0.03 a3=0.05
+module fan      mix       a0=0.14 a1=0.1 a2=0.03 a3=0.05
 module tug      mix       a0=0.08 a1=0.1 a2=0.06 a3=0.04
 module swell    mix       a0=0.70 a1=0.32 a2=0.35 a3=0 level=1.15
 module open     mix       a0=2 a1=0.35 a2=-0.22 a3=0 level=3.5
@@ -182,33 +193,33 @@ module left     mix       a0=1.0 a1=0.45 a2=0.22 a3=0.28 level=0.9
 module right    mix       a0=0.75 a1=0.7 a2=0.18 a3=0.34 level=0.9
 module decay    source    shape=dc volts=0.14
 module hiss     noise     level=0.7
-module squall   env       mode=ad attack=0.03 decay=2.2 threshold=0.95 level=5
+module squall   env       mode=ad attack=0.05 decay=3.6 threshold=1.0 level=5
 module tick     env       mode=ad attack=0.002 decay=0.16 threshold=1.5 level=5
 module cloud    env       mode=ad attack=0.012 decay=0.35 threshold=1.55 level=5
-module after    env       mode=ad attack=0.22 decay=1.15 threshold=1.9 level=5
+module after    env       mode=ad attack=0.35 decay=2.2 threshold=1.9 level=5
 module ava      rc1       preset=subthreshold leak=0 adaptation_rate=0.014 bias=2.70 rate=16 output_gain=2.0
 module avb      rc1       preset=subthreshold leak=0 adaptation_rate=0.014 bias=2.62 rate=22 output_gain=2.0
 module drive    mix       a0=0.12 a1=-0.12 a2=0.08 a3=-0.07
-module pharynx  rc1[3]    preset=burst rate=42 noise=0.03 bias=1.52 output_gain=2.0
+module pharynx  rc1[3]    preset=burst rate=28 noise=0.03 bias=1.46 output_gain=2.0
 module gulp     mix[3]    a0=0.12 a1=0.09 a2=0.05 a3=-0.08
 module song     mix       a0=0.55 a1=0.5 a2=0.45 level=0.85
-module hymn     env       mode=ad attack=0.03 decay=0.4 threshold=1.7 level=5
+module hymn     env       mode=ad attack=0.04 decay=0.7 threshold=1.7 level=5
 module stretch  env[2]    mode=follow attack=0.018 decay=0.14 level=4
 module nibble   mix       a0=-0.07 a1=-0.08 a2=0.09 a3=0.04
 module crawl    mix       a0=0.075 a1=-0.065 a2=0.05 a3=0.035
 module hum      mix       a0=0.16 a1=0.10 a2=0.06 a3=0.04 level=0.8
 module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
 module osc      vco       tune=74 fm_depth=22 pwm_depth=0.1 level=2.6
-module throat   vcf       cutoff=240 resonance=0.78 cv_depth=1.15 res_depth=0.1 drive=1.7 level=1.15
+module throat   vcf       cutoff=200 resonance=0.78 cv_depth=1.15 res_depth=0.1 drive=1.7 level=1.15
 module throatcv mix       a0=0.38 a1=0.20 a2=0.16 a3=-0.08
-module call     vcf       cutoff=310 resonance=0.82 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.1
+module call     vcf       cutoff=280 resonance=0.82 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.1
 module callcv   mix       a0=0.55 a1=0.22 a2=0.16 a3=0.10
-module body     vcf[2]    cutoff=260 resonance=0.36 cv_depth=1.25 res_depth=0.05 drive=1.15 level=1.05
+module body     vcf[2]    cutoff=220 resonance=0.36 cv_depth=1.25 res_depth=0.05 drive=1.15 level=1.05
 module bodycv   mix       a0=0.52 a1=0.18 a2=0.16 a3=0.10
 module room     vcf       cutoff=480 resonance=0.55 cv_depth=0.9 res_depth=0.08 drive=1.35
 module air      vcf       cutoff=360 resonance=0.88 cv_depth=0.95 res_depth=0.1 drive=1.45
 module dust     vcf       cutoff=980 resonance=0.92 cv_depth=0.75 res_depth=0.1 drive=1.25
-module roomamp  vca       response=exponential gain=0.03 cv_depth=1.05
+module roomamp  vca       response=exponential gain=0.035 cv_depth=1.05
 module pairamp  vca       response=exponential gain=0.0 cv_depth=1.15
 module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
 module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
@@ -216,9 +227,9 @@ module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15
 module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
 module end      mix[2]    a0=0.48 a1=0.72 level=0.95
 module fbank    fbank[2]  sub=1.2 bass=1.22 low=1.05 lowmid=0.78 mid=0.7 highmid=0.72 high=0.82 air=0.62 q=1.8 tilt=-0.08 tilt_depth=0.2 q_depth=0.08 mix=0.5 level=1.15
-module verb     verb[2]   time=0.06 decay=0.32 damp=0.48 size=0.72 mix=0.18 time_depth=0.01 decay_depth=0.08 level=1.0
+module verb     verb[2]   time=0.09 decay=0.42 damp=0.42 size=0.78 mix=0.24 time_depth=0.012 decay_depth=0.08 level=1.0
 module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.12 mix=1
-module dac      audioout  rate=48000 level=0.32
+module dac      audioout  rate=48000 level=0.30
 
 knob flake[0].decay 0.008
 knob flake[1].decay 0.012
@@ -232,20 +243,24 @@ knob grit[0].bias 1.44
 knob grit[1].bias 1.52
 knob grit[2].bias 1.40
 knob grit[3].bias 1.56
-knob sky[0].bias 2.22
-knob sky[1].bias 1.96
-knob sky[2].bias 2.14
-knob sky[3].bias 2.00
-knob sky[0].rate 4.2
-knob sky[1].rate 5.6
-knob sky[2].rate 6.8
-knob sky[3].rate 3.5
-knob pharynx[0].rate 32
-knob pharynx[1].rate 44
-knob pharynx[2].rate 58
-knob pharynx[0].bias 1.48
-knob pharynx[1].bias 1.58
-knob pharynx[2].bias 1.44
+knob sky[0].bias 2.18
+knob sky[1].bias 1.90
+knob sky[2].bias 2.10
+knob sky[3].bias 1.94
+knob sky[0].rate 1.8
+knob sky[1].rate 2.6
+knob sky[2].rate 3.4
+knob sky[3].rate 1.4
+knob tide[0].rate 0.16
+knob tide[1].rate 0.31
+knob tide[0].bias 2.12
+knob tide[1].bias 1.94
+knob pharynx[0].rate 22
+knob pharynx[1].rate 30
+knob pharynx[2].rate 38
+knob pharynx[0].bias 1.42
+knob pharynx[1].bias 1.52
+knob pharynx[2].bias 1.40
 
 # The sky is the climate. Its mix is the weather voltage.
 # Any cell can open a squall — if only sky[0] gates it, the doors
@@ -267,7 +282,7 @@ patch rain[5].out -> rainbox2.in2
 patch rainbox.out  -> shower.in0
 patch rainbox2.out -> shower.in1
 patch gust.out     -> fan.in0
-patch micenv[1].out -> fan.in1
+patch ear.chest    -> fan.in1
 patch brain.a      -> fan.in2
 patch cloud.inv    -> fan.in3
 patch fan.out      -> rain[*].in
@@ -280,7 +295,7 @@ patch ring[1].out -> hops[2].in0
 patch ring[2].out -> hops[3].in0
 patch ring[3].out -> hops[0].in0
 patch gust.out    -> hops[*].in1
-patch micenv[1].out -> hops[*].in2
+patch ear.formant -> hops[*].in2
 patch lean.out    -> hops[*].in3
 patch hops[i].out -> ring[i].in
 patch ring[0].out -> ringbox.in0
@@ -297,7 +312,7 @@ patch b.out     -> cross.in1
 patch cross.out -> b.in
 patch cross.inv -> a.in
 patch gust.out    -> tug.in0
-patch micenv[1].out -> tug.in1
+patch ear.formant -> tug.in1
 patch shower.out  -> tug.in2
 patch sand.b      -> tug.in3
 patch tug.out      -> a.in
@@ -380,7 +395,7 @@ patch a.out          -> stretch[1].gate
 # A tone that only exists for the length of a rain tick. It goes
 # through a mouth, not straight to the VCA.
 patch rain[2].out -> pace.in0
-patch micenv[1].out -> pace.in1
+patch ear.hiss    -> pace.in1
 patch after.out   -> pace.in2
 patch sieve.out   -> pace.in3
 patch pace.out    -> osc.fm
@@ -406,7 +421,7 @@ patch sky[0].out  -> layer[2].in0
 patch rain[1].out -> layer[0].in1
 patch rain[3].out -> layer[1].in1
 patch rain[5].out -> layer[2].in1
-patch micenv[1].out -> layer[*].in2
+patch ear.speech    -> layer[*].in2
 patch layer[0].out -> cortex.a
 patch layer[1].out -> cortex.b
 patch layer[2].out -> cortex.c
@@ -414,16 +429,17 @@ patch see.out      -> cortex.learn
 patch cortex.activity -> cortex.learn
 patch decay.out    -> cortex.forget
 
-# BCM watches a compressed mic, the weather, and a read of the rain.
-patch split.bp     -> hear.in0
-patch micenv[1].out -> hear.in1
+# BCM watches a place-coded mic, the weather, and a read of the rain.
+# Speech hair teaches; nothing from the ear is audio.
+patch ear.speech   -> hear.in0
+patch ear.loud     -> hear.in1
 patch shower.out   -> see.in0
 patch cortex.activity -> see.in1
 patch hear.out     -> brain.a
-patch micenv[1].out -> sense.in0
+patch ear.speech   -> sense.in0
 patch sense.out    -> brain.b
 patch gust.out     -> brain.c
-patch micenv[1].out -> teach.in0
+patch ear.speech   -> teach.in0
 patch brain.activity -> teach.in1
 patch sieve.out    -> teach.in2
 patch teach.out    -> brain.learn
@@ -433,14 +449,20 @@ patch grain.out    -> cortex.learn
 # Speech also current-drives the sky, so talking turns the climate over
 # instead of sitting on the speakers. Grain readings write back into
 # each sky cell; the sieve and the afterglow tilt two of them opposite
-# ways so the climate does not repeat.
-patch adc.env        -> sky[*].in
-patch micenv[0].out  -> sky[*].in
+# ways so the climate does not repeat. The tide leans the season.
 patch adc.out        -> miclim.in
-patch miclim.out     -> split.in
-patch split.lp       -> micenv[0].gate
-patch split.bp       -> micenv[1].gate
-patch split.hp       -> micenv[2].gate
+patch miclim.out     -> ear.in
+patch sand.activity  -> ear.tilt_cv
+patch ear.rumble     -> sky[*].in
+patch ear.loud       -> sky[*].in
+patch tide[0].out    -> season.in0
+patch tide[1].out    -> season.in1
+patch ear.place      -> season.in2
+patch ear.loud       -> season.in3
+patch season.out     -> sky[*].in
+patch season.out     -> body[*].cutoff_cv
+patch season.out     -> verb[*].time_cv
+patch season.out     -> throat.cutoff_cv
 patch squall.out -> after.gate
 patch sieve.out     -> lean.in0
 patch layer[1].out  -> lean.in1
@@ -471,8 +493,7 @@ patch echo[i].out   -> sky[i].in
 # ducks the pair, and nothing from adc.out reaches the bed.
 patch gust.out         -> swell.in0
 patch squall.out       -> swell.in1
-patch adc.env          -> swell.in2
-patch micenv[0].out    -> swell.in2
+patch ear.rumble       -> swell.in2
 patch swell.out        -> roomcv.in0
 patch cloud.out        -> roomcv.in1
 patch shower.out       -> roomcv.in2
@@ -485,7 +506,7 @@ patch cortex.b         -> paircv.in3
 patch paircv.out       -> pairamp.cv
 patch brain.a          -> lift.in0
 patch rain[1].out      -> lift.in1
-patch micenv[0].out    -> lift.in2
+patch ear.chest        -> lift.in2
 patch sand.b           -> lift.in3
 patch lift.out         -> room.cutoff_cv
 patch cortex.a         -> air.cutoff_cv
@@ -507,7 +528,7 @@ patch open.out         -> air.cutoff_cv
 # and the dust filter's corner. The squall ducks the grains so they
 # take the afterglow. Nothing from adc.out reaches dust.
 patch gust.out     -> stir.in0
-patch micenv[2].out -> stir.in1
+patch ear.air      -> stir.in1
 patch sand.a       -> stir.in2
 patch sieve.out    -> stir.in3
 patch stir.out     -> poke[*].in0
@@ -608,6 +629,8 @@ patch cloud.out    -> body[*].res_cv
 patch body[0].out  -> fbank[0].in
 patch body[1].out  -> fbank[1].in
 patch sand.activity -> fbank[*].tilt_cv
+patch ear.air       -> fbank[*].tilt_cv
+patch ear.place     -> band[*].cutoff_cv
 patch grain.out     -> fbank[*].res_cv
 patch fbank[0].out -> verb[0].in
 patch fbank[1].out -> verb[1].in
@@ -618,4 +641,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
