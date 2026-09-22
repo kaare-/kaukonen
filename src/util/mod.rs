@@ -8,21 +8,25 @@
 
 pub mod comp;
 pub mod env;
+pub mod fbank;
 pub mod mix;
 pub mod noise;
 pub mod svf;
 pub mod vca;
 pub mod vcf;
 pub mod vco;
+pub mod verb;
 
 pub use comp::Comp;
 pub use env::Env;
+pub use fbank::Fbank;
 pub use mix::Mix;
 pub use noise::Noise;
 pub use svf::Svf;
 pub use vca::Vca;
 pub use vcf::Vcf;
 pub use vco::Vco;
+pub use verb::Verb;
 
 /// Correction that removes most of the aliasing from a waveform's jump.
 ///

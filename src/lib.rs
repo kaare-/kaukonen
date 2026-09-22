@@ -51,5 +51,5 @@ pub use tc3::{Tc3, Tc3Params, Tc3State};
 pub use types::{
     InstanceVariation, SimConfig, Volt, DEFAULT_DT, DEFAULT_RAIL, DEFAULT_SAMPLE_RATE,
 };
-pub use util::{Comp, Env, Mix, Noise, Svf, Vca, Vcf, Vco};
+pub use util::{Comp, Env, Fbank, Mix, Noise, Svf, Vca, Vcf, Vco, Verb};
 pub use wav::{Audio, SampleFormat};

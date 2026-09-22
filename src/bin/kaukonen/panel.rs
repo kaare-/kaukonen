@@ -161,6 +161,15 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("band", "q"),
         ("miclim", "threshold"),
         ("miclim", "ratio"),
+        ("fbank", "sub"),
+        ("fbank", "lowmid"),
+        ("fbank", "mid"),
+        ("fbank", "air"),
+        ("fbank", "tilt"),
+        ("fbank", "mix"),
+        ("verb", "time"),
+        ("verb", "decay"),
+        ("verb", "mix"),
         ("outcomp", "threshold"),
         ("outcomp", "ratio"),
         ("outcomp", "attack"),
@@ -1027,12 +1036,16 @@ function render(state) {
 }
 
 const DESK_LABEL = {
-  split: 'mic split', band: 'output band', miclim: 'limiter', outcomp: 'compressor'
+  split: 'mic split', band: 'output band', miclim: 'limiter',
+  fbank: 'filter bank', verb: 'room', outcomp: 'compressor'
 };
 const DESK_FALLBACK = [
   ['split', 'cutoff'], ['split', 'q'],
   ['band', 'cutoff'], ['band', 'q'],
   ['miclim', 'threshold'], ['miclim', 'ratio'],
+  ['fbank', 'sub'], ['fbank', 'lowmid'], ['fbank', 'mid'],
+  ['fbank', 'air'], ['fbank', 'tilt'], ['fbank', 'mix'],
+  ['verb', 'time'], ['verb', 'decay'], ['verb', 'mix'],
   ['outcomp', 'threshold'], ['outcomp', 'ratio'],
   ['outcomp', 'attack'], ['outcomp', 'release']
 ];
@@ -1196,7 +1209,8 @@ function sendInput(extra) {
 
 const KIND_FILL = {
   audioin: '#14332a', audioout: '#1a2838', rc1: '#3b2f14', tc3: '#2a1f38',
-  neuron: '#331e2a', vcf: '#1a2e33', svf: '#1a2e33', comp: '#1a2420', vca: '#1a2a22', vco: '#2a2418',
+  neuron: '#331e2a', vcf: '#1a2e33', svf: '#1a2e33', fbank: '#1a2e33',
+  verb: '#242018', comp: '#1a2420', vca: '#1a2a22', vco: '#2a2418',
   mix: '#1b2028', env: '#2a2218', noise: '#222', source: '#1f2430'
 };
 
@@ -1498,6 +1512,8 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "cloud"));
         assert!(s.map.nodes.iter().any(|n| n.name == "roomcv"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "band"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "fbank"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "verb"));
         assert!(s.map.nodes.iter().any(|n| n.name == "miclim"));
         assert!(s.map.nodes.iter().any(|n| n.name == "split"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
@@ -1506,6 +1522,8 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s.desk.iter().any(|(m, k)| m == "miclim" && k == "threshold"));
+        assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
+        assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
         let json = s.to_json("");
         assert!(json.contains("\"desk\":["));
@@ -1526,6 +1544,8 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s.desk.iter().any(|(m, k)| m == "miclim" && k == "threshold"));
+        assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
+        assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
     }
 
@@ -1539,8 +1559,11 @@ mod tests {
         let page = get(&format!("{base}/"));
         assert!(page.contains("id=\"deskwrap\""), "{page}");
         assert!(page.contains("mic split"), "{page}");
+        assert!(page.contains("filter bank"), "{page}");
         let state = get(&format!("{base}/api/state"));
         assert!(state.contains("\"module\":\"split\""), "{state}");
+        assert!(state.contains("\"module\":\"fbank\""), "{state}");
+        assert!(state.contains("\"module\":\"verb\""), "{state}");
         assert!(state.contains("\"module\":\"outcomp\""), "{state}");
         let response = post(
             &format!("{base}/api/set"),

@@ -234,6 +234,8 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                     "split" => "mic split",
                     "band" => "output band",
                     "miclim" => "limiter",
+                    "fbank" => "filter bank",
+                    "verb" => "room",
                     "outcomp" => "compressor",
                     other => other,
                 })

@@ -70,9 +70,10 @@ fast RC-1 clocks, neuron gates and a third memory. The doors sidechain each
 other so a squall is not one swell, and later stages write current back
 into the sky, the rain and the pair. A limiter and a three-way split turn
 the microphone into low, mid and high envelopes that steer different
-parts of the rack. A wide CV bandpass and a tunable compressor sit on
-the mix at the end. The live page pins the mic split, the output
-band, the limiter and the compressor on a desk at the top.
+parts of the rack. A wide CV bandpass, an eight-band fixed filter bank,
+a small room and a tunable compressor sit on the mix at the end. The
+live page pins the mic split, the output band, the filter bank, the
+room, the limiter and the compressor on a desk at the top.
 Capture stirs the sky rather
 than sitting on the speakers. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
@@ -190,7 +191,7 @@ their names: `set amp.response exponential`.
 
 A `desk` line in the patch pins those knobs at the top of the page, so a
 rack as large as weather still has the mic split, the output band, the
-limiter and the compressor in reach.
+filter bank, the room, the limiter and the compressor in reach.
 
 `--set module.knob=value` does the same thing at launch, repeatably, which is
 how to try a variation without editing the patch.

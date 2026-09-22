@@ -129,6 +129,7 @@ on the desk is the same control as `set split.cutoff` at the console.
 
 ```
 desk split.cutoff split.q band.cutoff band.q
+desk fbank.tilt verb.mix
 desk miclim outcomp.threshold outcomp.ratio
 ```
 

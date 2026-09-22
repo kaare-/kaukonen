@@ -27,13 +27,18 @@
 # large window, not another resonant ping, and a little of the dry mix
 # stays so the climate body is still there.
 #
+# After that window, an eight-band fixed filter bank (ADDAC 601 centres)
+# colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
+# A small room — short pre-delay into four combs and two allpasses —
+# sits after the bank, before the compressor. It is a closet, not a hall.
+#
 # The microphone is limited, then split by a state-variable cell into
 # low, mid and high. Those bands never reach the converter: their
 # envelopes steer different parts of the climate. Low turns the sky,
 # mid leans on the rain and the ring, high tickles the grit clocks.
-# A tunable compressor sits on the stereo mix after the output band.
-# Those four sit on the live page desk: mic split, output band,
-# limiter and compressor.
+# A tunable compressor sits on the stereo mix after the room.
+# The live page desk pins the mic split, the output band, the filter
+# bank, the room, the limiter and the compressor.
 #
 #   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
 #   (256 is often fine; raise --block if `late` climbs)
@@ -73,6 +78,11 @@
 #   set bandcv.a0 0.28        # how far sand walks the band
 #   set split.cutoff 700      # mic crossover; lower puts more speech into the sky
 #   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
+#   set fbank.air 1.4         # 11 kHz band; 0 is dark, 2 is hiss
+#   set fbank.mid 0.4         # scoop the 1.1 kHz band
+#   set fbank.tilt 0.6        # + lifts the air, − lifts the sub
+#   set verb.mix 0.3          # how much room; 0.5 is a cave
+#   set verb.decay 0.55       # 0.2 is a slap, 0.8 rings
 #   set outcomp.threshold 1.6 # output compressor
 #   set outcomp.ratio 6       # 2 is gentle, 12 is a limiter
 #   set outcomp.attack 0.004  # 0.001 is smash, 0.04 is level
@@ -86,6 +96,8 @@ seed 23
 mismatch 0.06
 desk split.cutoff split.q band.cutoff band.q
 desk miclim.threshold miclim.ratio
+desk fbank.sub fbank.lowmid fbank.mid fbank.air fbank.tilt fbank.mix
+desk verb.time verb.decay verb.mix
 desk outcomp.threshold outcomp.ratio outcomp.attack outcomp.release
 
 module adc      audioin   gain=1.5 env_rate=10
@@ -154,6 +166,8 @@ module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
 module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
 module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
 module end      mix[2]    a0=0.48 a1=0.72 level=0.95
+module fbank    fbank[2]  sub=1.05 bass=1.1 low=0.95 lowmid=0.72 mid=0.68 highmid=0.88 high=1.18 air=1.28 q=2.0 tilt=0.12 tilt_depth=0.22 q_depth=0.08 mix=0.82 level=1.05
+module verb     verb[2]   time=0.08 decay=0.35 damp=0.32 size=0.8 mix=0.20 time_depth=0.012 decay_depth=0.08 level=1.0
 module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.05 mix=1
 module dac      audioout  rate=48000 level=0.30
 
@@ -442,9 +456,17 @@ patch left.out     -> end[0].in0
 patch band[0].bp   -> end[0].in1
 patch right.out    -> end[1].in0
 patch band[1].bp   -> end[1].in1
-patch end[0].out   -> outcomp[0].in
-patch end[1].out   -> outcomp[1].in
+patch end[0].out   -> fbank[0].in
+patch end[1].out   -> fbank[1].in
+patch sand.activity -> fbank[*].tilt_cv
+patch grain.out     -> fbank[*].res_cv
+patch fbank[0].out -> verb[0].in
+patch fbank[1].out -> verb[1].in
+patch after.out    -> verb[*].time_cv
+patch cloud.out    -> verb[*].decay_cv
+patch verb[0].out  -> outcomp[0].in
+patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out band[0].cutoff roomamp.gain pairamp.gain dustamp.gain
+record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out band[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain

@@ -794,6 +794,31 @@ mod tests {
     }
 
     #[test]
+    fn weather_has_a_filterbank_and_a_room() {
+        // The last colour is a fixed bank and a short room. If those
+        // modules are missing the output is just the old band+comp.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let kinds: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.get(ModuleId(i)).kind_name())
+            .collect();
+        assert!(kinds.iter().any(|k| *k == "fbank"), "{kinds:?}");
+        assert!(kinds.iter().any(|k| *k == "verb"), "{kinds:?}");
+        let mut stream = Stream::new(built);
+        let names = ["fbank[0].env", "verb[0].wet"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut buffer = vec![0.0f32; 256 * 2];
+        for _ in 0..200 {
+            stream.process(&mut buffer, 2);
+        }
+        let now = stream.engine_mut().snapshot_sample(&names);
+        assert!(now[0].is_finite(), "fbank env {now:?}");
+        assert!(now[1].is_finite(), "verb wet {now:?}");
+    }
+
+    #[test]
     fn weather_mic_steers_the_sky_not_the_speakers() {
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut dry = Stream::new(built(&text));
