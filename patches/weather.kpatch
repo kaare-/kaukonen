@@ -455,6 +455,8 @@ patch miclim.out     -> ear.in
 patch sand.activity  -> ear.tilt_cv
 patch ear.rumble     -> sky[*].in
 patch ear.loud       -> sky[*].in
+patch stretch[0].out -> tide[0].in
+patch coil.out       -> tide[1].in
 patch tide[0].out    -> season.in0
 patch tide[1].out    -> season.in1
 patch ear.place      -> season.in2
