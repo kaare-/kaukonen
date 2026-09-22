@@ -844,35 +844,37 @@ const PAGE: &str = r##"<!DOCTYPE html>
 :root { color-scheme: dark; }
 * { box-sizing: border-box; }
 body { font-family: ui-sans-serif, system-ui, sans-serif; background: #0d0f12;
-       color: #e5e7eb; margin: 0; padding: 20px 24px 48px; }
-h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
-h2 { font-size: 12px; font-weight: 600; text-transform: uppercase;
-     letter-spacing: .08em; color: #9ca3af; margin: 0 0 10px; }
-.sub { color: #9ca3af; font-size: 13px; margin: 0 0 16px; }
-header { display: flex; justify-content: space-between; gap: 24px;
-         align-items: flex-start; flex-wrap: wrap; margin-bottom: 18px; }
-.meter { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.peak { width: 160px; height: 10px; background: #1b2028; border: 1px solid #2d333b;
+       color: #e5e7eb; margin: 0; padding: 12px 16px 40px; }
+h1 { font-size: 16px; font-weight: 600; margin: 0 0 2px; }
+h2 { font-size: 11px; font-weight: 600; text-transform: uppercase;
+     letter-spacing: .08em; color: #9ca3af; margin: 0 0 6px; }
+.sub { color: #9ca3af; font-size: 12px; margin: 0; }
+header { display: flex; justify-content: space-between; gap: 16px;
+         align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.meter { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.peak { width: 120px; height: 7px; background: #1b2028; border: 1px solid #2d333b;
         border-radius: 99px; overflow: hidden; }
 .peak > i { display: block; height: 100%; width: 0; background: #34d399; }
 .peak.hot > i { background: #f59e0b; }
 .peak.clip > i { background: #f87171; }
-.stat { font-variant-numeric: tabular-nums; font-size: 12px; color: #9ca3af; }
+.stat { font-variant-numeric: tabular-nums; font-size: 11px; color: #9ca3af; }
 .stat b { color: #e5e7eb; font-weight: 600; }
-.transport { display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
-             background: #12151a; border: 1px solid #23282f; border-radius: 8px;
-             padding: 12px 14px; margin-bottom: 12px; }
-.transport label { font-size: 12px; color: #9ca3af; }
-.transport .val { font-variant-numeric: tabular-nums; min-width: 3.5em; }
+.transport { display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap;
+             background: #12151a; border: 1px solid #23282f; border-radius: 6px;
+             padding: 5px 10px; margin-bottom: 6px; }
+.transport label { font-size: 11px; color: #9ca3af; }
+.transport .val { font-variant-numeric: tabular-nums; min-width: 2.8em; font-size: 11px; }
 .transport select { background: #1b1f26; color: #e5e7eb; border: 1px solid #2d333b;
-                    border-radius: 4px; padding: 4px 8px; max-width: 260px; }
+                    border-radius: 4px; padding: 2px 6px; max-width: 220px; font-size: 12px; }
+.transport .gain { width: 140px; }
+.transport .sep { width: 1px; height: 18px; background: #2d333b; margin: 0 4px; }
 button { background: #1b1f26; color: #e5e7eb; border: 1px solid #2d333b;
-         border-radius: 5px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+         border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 button:hover { border-color: #4b5563; }
 button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 button.on { border-color: #065f46; color: #6ee7b7; }
 button.danger { border-color: #7f1d1d; color: #fecaca; }
-.note { color: #9ca3af; font-size: 12px; margin: -4px 0 18px; min-height: 1.2em; }
+.note { color: #9ca3af; font-size: 11px; margin: 0 0 6px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 14px; }
 .card { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
@@ -890,20 +892,22 @@ button.danger { border-color: #7f1d1d; color: #fecaca; }
 .row .doc { grid-column: 1 / -1; font-size: 11px; color: #6b7280; margin: -4px 0 4px; }
 .hint { color: #6b7280; font-size: 12px; margin-top: 18px; }
 .topsticky { position: sticky; top: 0; z-index: 8; background: #0d0f12;
-             padding-bottom: 4px; }
-.deskwrap { margin-bottom: 10px; }
-.deskrow { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
-           background: #12151a; border: 1px solid #2a3a32; border-radius: 8px;
-           padding: 8px 12px; margin-bottom: 8px; }
-.deskrow .who { font-size: 11px; font-weight: 600; color: #6ee7b7; min-width: 7.8em;
-                text-transform: uppercase; letter-spacing: .06em; }
-.deskrow .cell { display: flex; align-items: center; gap: 8px; }
-.deskrow label { font-size: 12px; color: #d1d5db; min-width: 4.6em; }
-.deskrow input[type=range] { width: 130px; accent-color: #34d399; }
-.deskrow .val { font-variant-numeric: tabular-nums; font-size: 12px; color: #93c5fd;
-                min-width: 4.6em; }
+             padding-bottom: 2px; }
+.deskwrap { margin-bottom: 6px; }
+#desk { display: flex; flex-wrap: wrap; gap: 4px; }
+.deskrow { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center;
+           background: #12151a; border: 1px solid #2a3a32; border-radius: 5px;
+           padding: 3px 8px; flex: 1 1 320px; min-width: 0; }
+.deskrow.wide { flex: 1 1 100%; }
+.deskrow .who { font-size: 10px; font-weight: 600; color: #6ee7b7; min-width: 5.4em;
+                text-transform: uppercase; }
+.deskrow .cell { display: flex; align-items: center; gap: 5px; }
+.deskrow label { font-size: 11px; color: #d1d5db; }
+.deskrow input[type=range] { width: 88px; accent-color: #34d399; }
+.deskrow .val { font-variant-numeric: tabular-nums; font-size: 11px; color: #93c5fd;
+                min-width: 3.2em; }
 .mapwrap { background: #12151a; border: 1px solid #23282f; border-radius: 8px;
-           padding: 10px 12px 8px; margin-bottom: 18px; }
+           padding: 8px 10px 6px; margin-bottom: 12px; }
 .mapwrap header { display: flex; justify-content: space-between; align-items: baseline;
                   margin-bottom: 8px; }
 .mapscroll { overflow: auto; max-height: 560px; }
@@ -934,14 +938,13 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
   </div>
 </header>
 <div class="topsticky">
-<div class="transport">
+<div class="transport" id="inputrow">
   <label for="gain">gain</label>
-  <input id="gain" type="range" min="0" max="1" step="0.001" value="0.3" style="width:220px">
+  <input id="gain" class="gain" type="range" min="0" max="1" step="0.001" value="0.3">
   <span class="val" id="gainval">0.3</span>
   <button id="mute">mute</button>
   <button id="quit" class="danger">quit</button>
-</div>
-<div class="transport" id="inputrow">
+  <span class="sep"></span>
   <label>capture</label>
   <button id="capture">off</button>
   <label for="indevice">device</label>
@@ -951,7 +954,7 @@ code { font-family: ui-monospace, monospace; color: #93c5fd; }
   <div class="peak" id="inpeakbar"><i id="inpeakfill"></i></div>
   <div class="stat">in <b id="inpeak">—</b></div>
 </div>
-<p class="note" id="inputhint"></p>
+<p class="note" id="inputhint" hidden></p>
 <div class="deskwrap" id="deskwrap" hidden>
   <div id="desk"></div>
 </div>
@@ -1000,8 +1003,9 @@ function render(state) {
   $('title').textContent = state.patch.split('/').pop();
   const bits = [state.device || 'no device'];
   if (last && last.rate) bits.push(last.rate + ' Hz');
-  $('sub').textContent = bits.join(' · ') + ' · knobs on ' +
-    state.modules.map(m => m.count > 1 ? m.name + '[' + m.count + ']' : m.name).join('  ');
+  const banks = state.modules.length;
+  const cells = state.modules.reduce((n, m) => n + (m.count || 1), 0);
+  $('sub').textContent = bits.join(' · ') + ' · ' + cells + ' modules · ' + banks + ' banks';
   if (!dragging.has('gain')) {
     $('gain').value = state.gain;
     $('gainval').textContent = Number(state.gain).toFixed(2);
@@ -1092,7 +1096,7 @@ function renderDesk(state) {
   });
   groups.forEach(g => {
     const row = document.createElement('div');
-    row.className = 'deskrow';
+    row.className = 'deskrow' + (g.knobs.length >= 5 ? ' wide' : '');
     row.id = 'desk-' + g.name;
     const who = document.createElement('div');
     who.className = 'who';
@@ -1154,6 +1158,7 @@ function renderInput(state) {
   } else {
     hint.textContent = '';
   }
+  hint.hidden = !hint.textContent;
   fillDevices(inp);
   fillChannels(inp);
   if (state.input_peak != null) {
@@ -1662,6 +1667,7 @@ mod tests {
         assert!(PAGE.contains("id=\"mapwrap\""));
         assert!(PAGE.contains("id=\"deskwrap\""));
         assert!(PAGE.contains("topsticky"));
+        assert!(PAGE.contains("#desk { display: flex; flex-wrap: wrap;"));
         assert!(PAGE.contains("mic split"));
         assert!(PAGE.contains("renderDesk"));
         assert!(PAGE.contains("drawMap"));
