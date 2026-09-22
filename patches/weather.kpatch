@@ -22,6 +22,18 @@
 # and teaches the memories, so the next burst is not the last one
 # played backwards.
 #
+# A nematode-like command pair sits on top of that. AVA (retreat)
+# listens to the oscillating pair and the afterglow; AVB (advance)
+# listens to the rain and the squall. They veto each other. Advance
+# writes into the sky and the rain and starts a three-cell pharynx
+# that walks at a singing rate; retreat writes the other way and
+# occupies the pair. The throat's hymn ducks the rain so the worm
+# sings in the holes, lifts the grains, and FM's the plucked tone.
+# Body stretch — followers on the weather bed and the pair — coils
+# back into the command cells and the sky, so the sound of the rack
+# is also a proprioceptive input. The climate is a small nervous
+# system that hears itself.
+#
 # A wide state-variable bandpass sits on the stereo mix at the end. The
 # climate walks its centre; a grain cloud briefly peaks the Q. It is a
 # large window, not another resonant ping, and a little of the dry mix
@@ -37,8 +49,9 @@
 # envelopes steer different parts of the climate. Low turns the sky,
 # mid leans on the rain and the ring, high tickles the grit clocks.
 # A tunable compressor sits on the stereo mix after the room.
-# The live page desk pins the mic split, the output band, the filter
-# bank, the room, the limiter and the compressor.
+# The live page desk pins the mic split, the output band, the command
+# pair, the pharynx, the filter bank, the room, the limiter and the
+# compressor.
 #
 #   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
 #   (256 is often fine; raise --block if `late` climbs)
@@ -73,6 +86,13 @@
 #   set write.a0 0.14         # how hard that reading kicks the cell it read
 #   set recoil.a1 -0.12       # grains push the pair apart
 #   set lean.a0 0.1           # how much the grain sieve tilts the climate
+#   set ava.bias 2.9          # retreat; higher occupies the pair and ducks the rain
+#   set avb.bias 2.9          # advance; higher occupies the rain and starts the throat
+#   set pharynx.bias 1.7      # 1.3 is mute, 1.8 is always humming
+#   set pharynx.rate 60       # how fast the throat walks
+#   set hymn.decay 0.6        # how long a swallow rings
+#   set nibble.a0 -0.2        # how hard the hymn ducks the rain
+#   set crawl.a0 0.12         # how hard advance writes into the sky
 #   set band.cutoff 600       # centre of the final window; 400 is dark, 1600 is thin
 #   set band.q 0.45           # 0.4 is a large band, 2 is a wah
 #   set bandcv.a0 0.28        # how far sand walks the band
@@ -96,6 +116,7 @@ seed 23
 mismatch 0.06
 desk split.cutoff split.q band.cutoff band.q
 desk miclim.threshold miclim.ratio
+desk ava.bias avb.bias pharynx.bias pharynx.rate hymn.decay
 desk fbank.sub fbank.lowmid fbank.mid fbank.air fbank.tilt fbank.mix
 desk verb.time verb.decay verb.mix
 desk outcomp.threshold outcomp.ratio outcomp.attack outcomp.release
@@ -155,6 +176,18 @@ module squall   env       mode=ad attack=0.02 decay=1.8 threshold=1.4 level=5
 module tick     env       mode=ad attack=0.002 decay=0.16 threshold=1.5 level=5
 module cloud    env       mode=ad attack=0.012 decay=0.22 threshold=1.55 level=5
 module after    env       mode=ad attack=0.18 decay=0.75 threshold=2.2 level=5
+module ava      rc1       preset=subthreshold leak=0 adaptation_rate=0.01 bias=2.72 rate=18 output_gain=2.0
+module avb      rc1       preset=subthreshold leak=0 adaptation_rate=0.01 bias=2.64 rate=26 output_gain=2.0
+module drive    mix       a0=0.12 a1=-0.12 a2=0.08 a3=-0.07
+module pharynx  rc1[3]    preset=burst rate=42 noise=0.03 bias=1.52 output_gain=2.0
+module gulp     mix[3]    a0=0.12 a1=0.09 a2=0.05 a3=-0.08
+module song     mix       a0=0.55 a1=0.5 a2=0.45 level=0.85
+module hymn     env       mode=ad attack=0.03 decay=0.4 threshold=1.7 level=5
+module stretch  env[2]    mode=follow attack=0.018 decay=0.14 level=4
+module nibble   mix       a0=-0.10 a1=-0.08 a2=0.09 a3=0.04
+module crawl    mix       a0=0.075 a1=-0.065 a2=0.05 a3=0.035
+module hum      mix       a0=0.16 a1=0.10 a2=0.06 a3=0.04 level=0.8
+module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
 module osc      vco       tune=92 fm_depth=28 pwm_depth=0.08 level=2.8
 module room     vcf       cutoff=760 resonance=0.42 cv_depth=0.7 res_depth=0.06 drive=1.3
 module air      vcf       cutoff=520 resonance=0.95 cv_depth=0.85 res_depth=0.1 drive=1.4
@@ -183,6 +216,12 @@ knob grit[0].bias 1.38
 knob grit[1].bias 1.46
 knob grit[2].bias 1.34
 knob grit[3].bias 1.50
+knob pharynx[0].rate 32
+knob pharynx[1].rate 44
+knob pharynx[2].rate 58
+knob pharynx[0].bias 1.48
+knob pharynx[1].bias 1.58
+knob pharynx[2].bias 1.44
 
 # The sky is the climate. Its mix is the weather voltage.
 patch sky[0].out -> gust.in0
@@ -243,6 +282,66 @@ patch cortex.b     -> recoil.in2
 patch layer[2].out -> recoil.in3
 patch recoil.out   -> a.in
 patch recoil.inv   -> b.in
+
+# Command interneurons. Advance (AVB) listens to rain and squall;
+# retreat (AVA) listens to the pair and the afterglow. Each vetoes
+# the other. Body stretch coils into both so the worm feels its own
+# weather. Advance starts the pharynx; retreat occupies the pair.
+patch shower.out       -> drive.in0
+patch a.out            -> drive.in1
+patch squall.out       -> drive.in2
+patch after.out        -> drive.in3
+patch drive.out        -> avb.in
+patch drive.inv        -> ava.in
+patch stretch[0].out   -> coil.in0
+patch stretch[1].out   -> coil.in1
+patch hymn.out         -> coil.in2
+patch song.out         -> coil.in3
+patch coil.out         -> avb.in
+patch coil.inv         -> ava.in
+patch avb.out          -> crawl.in0
+patch ava.out          -> crawl.in1
+patch hymn.out         -> crawl.in2
+patch sand.activity    -> crawl.in3
+patch crawl.out        -> sky[0].in
+patch crawl.inv        -> sky[2].in
+patch crawl.out        -> hops[*].in3
+patch hymn.out         -> nibble.in0
+patch ava.out          -> nibble.in1
+patch avb.out          -> nibble.in2
+patch stretch[1].out   -> nibble.in3
+patch nibble.out       -> rain[*].in
+patch nibble.inv       -> a.in
+patch nibble.inv       -> b.in
+patch nibble.inv       -> grit[*].in
+
+# Three-cell pharynx. Neighbour coupling walks a swallow; advance
+# current-drives it; the hymn and retreat inhibit it so it does not
+# lock. The song is the throat voltage; it sits in the room body,
+# FM's the plucked tone, and leans the bank.
+patch pharynx[0].out -> gulp[1].in0
+patch pharynx[1].out -> gulp[2].in0
+patch pharynx[2].out -> gulp[0].in0
+patch avb.out        -> gulp[*].in1
+patch gust.out       -> gulp[*].in2
+patch stretch[0].out -> gulp[*].in2
+patch hymn.out       -> gulp[*].in3
+patch ava.out        -> gulp[*].in3
+patch gulp[i].out    -> pharynx[i].in
+patch pharynx[0].out -> song.in0
+patch pharynx[1].out -> song.in1
+patch pharynx[2].out -> song.in2
+patch song.out       -> hymn.gate
+patch song.out       -> hum.in0
+patch hymn.out       -> hum.in1
+patch avb.out        -> hum.in2
+patch stretch[0].out -> hum.in3
+patch hum.out        -> room.in
+patch hum.out        -> osc.fm
+patch hum.out        -> fbank[*].tilt_cv
+patch hum.out        -> verb[*].time_cv
+patch bed.out        -> stretch[0].gate
+patch a.out          -> stretch[1].gate
 
 # A tone that only exists for the length of a rain tick.
 patch rain[2].out -> pace.in0
@@ -469,4 +568,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out band[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain

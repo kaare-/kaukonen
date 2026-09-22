@@ -20,7 +20,7 @@ use std::path::Path;
 const MAX_POINTS: usize = 16_000;
 
 /// A rack this size is worth drawing. Beyond it the diagram is unreadable.
-const MAX_DIAGRAM_MODULES: usize = 128;
+const MAX_DIAGRAM_MODULES: usize = 160;
 
 /// Everything the page can show.
 pub struct Scope<'a> {

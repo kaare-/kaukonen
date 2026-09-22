@@ -821,6 +821,74 @@ mod tests {
     }
 
     #[test]
+    fn weather_command_cells_compete() {
+        // AVA and AVB are a forward/reverse pair. If they stay locked
+        // the nematode never chooses a gait.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let names = ["ava.v", "avb.v"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut spread = 0.0f32;
+        let mut ava_hi = 0.0f32;
+        let mut avb_hi = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..6000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            spread = spread.max((now[0] - now[1]).abs());
+            ava_hi = ava_hi.max(now[0].abs());
+            avb_hi = avb_hi.max(now[1].abs());
+        }
+        assert!(ava_hi > 0.4, "retreat never left rest: {ava_hi}");
+        assert!(avb_hi > 0.4, "advance never left rest: {avb_hi}");
+        assert!(spread > 0.35, "command cells stayed locked: {spread}");
+    }
+
+    #[test]
+    fn weather_pharynx_sings_and_writes_back() {
+        // The throat has to move, and its hymn has to reach the climate
+        // — nibble, crawl, coil — or the worm is only decoration.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let names = [
+            "hymn.out",
+            "song.out",
+            "crawl.out",
+            "nibble.out",
+            "coil.out",
+            "stretch[0].out",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let mut hymn = 0.0f32;
+        let mut song = 0.0f32;
+        let mut crawl = 0.0f32;
+        let mut nibble = 0.0f32;
+        let mut coil = 0.0f32;
+        let mut stretch = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..6000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            hymn = hymn.max(now[0].abs());
+            song = song.max(now[1].abs());
+            crawl = crawl.max(now[2].abs());
+            nibble = nibble.max(now[3].abs());
+            coil = coil.max(now[4].abs());
+            stretch = stretch.max(now[5].abs());
+        }
+        assert!(song > 0.15, "the pharynx never sang: {song}");
+        assert!(hymn > 0.4, "the hymn never rose: {hymn}");
+        assert!(crawl > 0.03, "advance never wrote into the sky: {crawl}");
+        assert!(nibble > 0.03, "the hymn never ducked the rain: {nibble}");
+        assert!(coil > 0.03, "stretch never coiled back: {coil}");
+        assert!(stretch > 0.05, "the body never moved: {stretch}");
+    }
+
+    #[test]
     fn weather_mic_steers_the_sky_not_the_speakers() {
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut dry = Stream::new(built(&text));
