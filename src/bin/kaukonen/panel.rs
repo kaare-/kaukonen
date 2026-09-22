@@ -179,9 +179,9 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         .iter()
         .copied()
         .filter(|(bank, knob)| {
-            modules.iter().any(|m| {
-                m.name == *bank && m.knobs.iter().any(|k| k.spec.name == *knob)
-            })
+            modules
+                .iter()
+                .any(|m| m.name == *bank && m.knobs.iter().any(|k| k.spec.name == *knob))
         })
         .map(|(bank, knob)| (bank.to_string(), knob.to_string()))
         .collect()
@@ -1521,7 +1521,10 @@ mod tests {
         assert!(s.map.cables.iter().any(|c| c.feedback));
         assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
-        assert!(s.desk.iter().any(|(m, k)| m == "miclim" && k == "threshold"));
+        assert!(s
+            .desk
+            .iter()
+            .any(|(m, k)| m == "miclim" && k == "threshold"));
         assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
@@ -1543,7 +1546,10 @@ mod tests {
         let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
         assert!(s.desk.iter().any(|(m, k)| m == "split" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
-        assert!(s.desk.iter().any(|(m, k)| m == "miclim" && k == "threshold"));
+        assert!(s
+            .desk
+            .iter()
+            .any(|(m, k)| m == "miclim" && k == "threshold"));
         assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));

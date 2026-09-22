@@ -240,10 +240,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                     other => other,
                 })
                 .collect();
-            println!(
-                "desk     {} — under Capture on the page",
-                pretty.join(", ")
-            );
+            println!("desk     {} — under Capture on the page", pretty.join(", "));
         }
     }
     let rack = Stream::new(built);

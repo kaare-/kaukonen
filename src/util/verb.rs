@@ -212,18 +212,19 @@ mod tests {
     fn an_impulse_has_a_tail() {
         let mut v = Verb::new();
         v.mix = 1.0;
-        v.time = 0.02;
+        v.time = 0.01;
         v.decay = 0.7;
         v.size = 1.0;
         v.step(&[1.0, 0.0, 0.0], DT);
         let mut peak_early = 0.0f32;
         let mut peak_late = 0.0f32;
-        for i in 0..8000 {
+        for i in 0..9000 {
             let y = v.step(&[0.0, 0.0, 0.0], DT)[1].abs();
-            if i < 2000 {
+            // Predelay plus the shortest comb lands near 2k samples.
+            if i < 3500 {
                 peak_early = peak_early.max(y);
             }
-            if i > 4000 {
+            if i > 6000 {
                 peak_late = peak_late.max(y);
             }
         }
@@ -264,7 +265,10 @@ mod tests {
         }
         let short = late(0.2);
         let long = late(0.85);
-        assert!(long > 2.0 * short, "decay did nothing: short {short} long {long}");
+        assert!(
+            long > 2.0 * short,
+            "decay did nothing: short {short} long {long}"
+        );
     }
 
     #[test]

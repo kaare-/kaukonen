@@ -619,7 +619,9 @@ mod tests {
             rms.push((e / slice.len() as f32).sqrt());
         }
         let quiet = rms.iter().filter(|r| **r < 0.008).count();
-        let hot = rms.iter().filter(|r| **r > 0.03).count();
+        // The room and bank round the crest, so a squall is 0.02 against a
+        // 0.00005 floor rather than the sharper 0.03 the dry mix used to hit.
+        let hot = rms.iter().filter(|r| **r > 0.02).count();
         let peak = left.iter().fold(0.0f32, |m, s| m.max(s.abs()));
         assert!(
             quiet >= 2,

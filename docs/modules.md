@@ -172,6 +172,46 @@ Presets: subthreshold, pulse, tonic, burst.
 | `makeup` | 0..4 | `1` | gain after reduction |
 | `mix` | 0..1 | `1` | dry/wet; 1 is fully compressed |
 
+## `fbank`
+
+- inputs: `in`, `tilt_cv`, `res_cv`
+- outputs: `out`, `odd`, `even`, `env`
+- states: `sub`, `bass`, `low`, `lowmid`, `mid`, `highmid`, `high`, `air`, `env`
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `sub` | 0..2 | `1` | 50 Hz band |
+| `bass` | 0..2 | `1` | 110 Hz band |
+| `low` | 0..2 | `1` | 220 Hz band |
+| `lowmid` | 0..2 | `1` | 500 Hz band |
+| `mid` | 0..2 | `1` | 1.1 kHz band |
+| `highmid` | 0..2 | `1` | 2.2 kHz band |
+| `high` | 0..2 | `1` | 5.2 kHz band |
+| `air` | 0..2 | `1` | 11 kHz band |
+| `q` | 0.5..8 | `2.1` | selectivity shared by every band |
+| `tilt` | -2..2 | `0` | lows vs highs; + lifts the air |
+| `tilt_depth` | -2..2 | `0.25` | how hard TILT CV leans the bank |
+| `q_depth` | -2..2 | `0` | Q change per volt on RES CV |
+| `mix` | 0..1 | `1` | dry/wet; 1 is the bank alone |
+| `level` | 0..4 | `1` | output scale |
+
+## `verb`
+
+- inputs: `in`, `time_cv`, `decay_cv`
+- outputs: `out`, `wet`
+- states: `wet`, `env`
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `time` | 0.005..0.45 s | `0.07 s` | pre-delay; the slap before the tank |
+| `decay` | 0.05..0.94 | `0.42` | how long the tank rings |
+| `damp` | 0..0.9 | `0.28` | highs die in the feedback; 0 is bright |
+| `size` | 0.35..1.6 | `0.85` | scales the comb lengths |
+| `mix` | 0..1 | `0.22` | dry/wet |
+| `time_depth` | -0.4..0.4 | `0.05` | seconds per volt on TIME CV |
+| `decay_depth` | -1..1 | `0.12` | decay change per volt on DECAY CV |
+| `level` | 0..4 | `1` | wet scale |
+
 ## `vca`
 
 - inputs: `in`, `cv`

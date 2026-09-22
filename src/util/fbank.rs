@@ -5,7 +5,9 @@ use crate::param::{knob_accessors, params, ParamSpec, Unit};
 use crate::types::{clamp_rail, Volt, DEFAULT_RAIL};
 
 /// ADDAC 601 centres: 50 / 110 / 220 / 500 / 1.1k / 2.2k / 5.2k / 11k.
-const CENTRES: [f32; 8] = [50.0, 110.0, 220.0, 500.0, 1_100.0, 2_200.0, 5_200.0, 11_000.0];
+const CENTRES: [f32; 8] = [
+    50.0, 110.0, 220.0, 500.0, 1_100.0, 2_200.0, 5_200.0, 11_000.0,
+];
 
 const IN_JACKS: &[&str] = &["in", "tilt_cv", "res_cv"];
 const OUT_JACKS: &[&str] = &["out", "odd", "even", "env"];
@@ -92,7 +94,13 @@ impl Fbank {
 
     fn levels(&self) -> [f32; 8] {
         [
-            self.sub, self.bass, self.low, self.lowmid, self.mid, self.highmid, self.high,
+            self.sub,
+            self.bass,
+            self.low,
+            self.lowmid,
+            self.mid,
+            self.highmid,
+            self.high,
             self.air,
         ]
     }
@@ -171,17 +179,18 @@ impl AnalogModule for Fbank {
         let mut wet = 0.0;
         let mut odd = 0.0;
         let mut even = 0.0;
-        let mut peak = 0.0;
+        let mut peak = 0.0f32;
         for i in 0..8 {
             let lean = 1.0 + tilt * (i as f32 - 3.5) / 4.0;
             let gain = (levels[i] * lean.clamp(0.0, 3.0)).clamp(0.0, 4.0);
             let y = Self::bandpass(&mut self.cells[i], x, CENTRES[i], q, dt) * gain;
             self.bands[i] = y;
             wet += y;
+            // ADDAC numbers the 50 Hz band as 1, so even indices are odd bands.
             if i % 2 == 0 {
-                even += y;
-            } else {
                 odd += y;
+            } else {
+                even += y;
             }
             peak = peak.max(y.abs());
         }
@@ -238,8 +247,18 @@ mod tests {
         let mut bank = Fbank::new();
         bank.mix = 1.0;
         let high = drive(&mut bank, 5200.0, 0.6);
-        assert!(low[2] > 1.4 * low[1], "110 Hz should prefer even: odd {} even {}", low[1], low[2]);
-        assert!(high[1] > 1.4 * high[2], "5.2 kHz should prefer odd: odd {} even {}", high[1], high[2]);
+        assert!(
+            low[2] > 1.4 * low[1],
+            "110 Hz should prefer even: odd {} even {}",
+            low[1],
+            low[2]
+        );
+        assert!(
+            high[1] > 1.4 * high[2],
+            "5.2 kHz should prefer odd: odd {} even {}",
+            high[1],
+            high[2]
+        );
     }
 
     #[test]
