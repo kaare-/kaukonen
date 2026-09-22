@@ -894,11 +894,12 @@ button.danger { border-color: #7f1d1d; color: #fecaca; }
 .topsticky { position: sticky; top: 0; z-index: 8; background: #0d0f12;
              padding-bottom: 2px; }
 .deskwrap { margin-bottom: 6px; }
-#desk { display: flex; flex-wrap: wrap; gap: 4px; }
+#desk { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 4px; }
 .deskrow { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center;
            background: #12151a; border: 1px solid #2a3a32; border-radius: 5px;
-           padding: 3px 8px; flex: 1 1 320px; min-width: 0; }
-.deskrow.wide { flex: 1 1 100%; }
+           padding: 3px 8px; min-width: 0; }
+.deskrow.wide { grid-column: 1 / -1; }
 .deskrow .who { font-size: 10px; font-weight: 600; color: #6ee7b7; min-width: 5.4em;
                 text-transform: uppercase; }
 .deskrow .cell { display: flex; align-items: center; gap: 5px; }
@@ -1667,7 +1668,7 @@ mod tests {
         assert!(PAGE.contains("id=\"mapwrap\""));
         assert!(PAGE.contains("id=\"deskwrap\""));
         assert!(PAGE.contains("topsticky"));
-        assert!(PAGE.contains("#desk { display: flex; flex-wrap: wrap;"));
+        assert!(PAGE.contains("#desk { display: grid;"));
         assert!(PAGE.contains("mic split"));
         assert!(PAGE.contains("renderDesk"));
         assert!(PAGE.contains("drawMap"));
