@@ -72,13 +72,14 @@ into the sky, the rain and the pair. A command pair (retreat / advance)
 vetoes itself and starts a three-cell pharynx that sings in the holes
 of the rain; body stretch coils that sound back into the climate. A
 two-cell tide wanders on a minute scale so a half-hour pass keeps
-walking. CV ladders sit on the pharynx (throat), the plucked tone
+walking. Two slightly detuned low sines sit under the mix as a
+slowly rolling bed. CV ladders sit on the pharynx (throat), the plucked tone
 (call) and the stereo mix (body) so a squall is a chest, not a beep.
 A limiter and a six-hair cochlea place-code the microphone into
 rumble, chest, formant, speech, hiss and air that steer different
 nerves. A wide CV bandpass, an eight-band fixed filter bank,
 a small room and a tunable compressor sit on the mix at the end. The
-live page pins the ear, the output band, the command pair, the
+live page pins the ear, the drone, the output band, the command pair, the
 pharynx, the throat, the call, the body, the filter bank, the room,
 the limiter and the compressor on a desk at the top.
 Capture stirs the sky rather
@@ -197,7 +198,7 @@ refused rather than doing something surprising mid-performance. Enum knobs take
 their names: `set amp.response exponential`.
 
 A `desk` line in the patch pins those knobs at the top of the page, so a
-rack as large as weather still has the ear, the output band, the
+rack as large as weather still has the ear, the drone, the output band, the
 command pair, the pharynx, the throat, the call, the body, the filter
 bank, the room, the limiter and the compressor in reach.
 

@@ -158,6 +158,9 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("ear", "q"),
         ("ear", "tilt"),
         ("ear", "follow"),
+        ("drone", "tune"),
+        ("dronef", "cutoff"),
+        ("droneamp", "gain"),
         ("band", "cutoff"),
         ("band", "q"),
         ("miclim", "threshold"),
@@ -1050,13 +1053,15 @@ function render(state) {
 }
 
 const DESK_LABEL = {
-  ear: 'ear', split: 'mic split', band: 'output band', miclim: 'limiter',
+  ear: 'ear', drone: 'drone', dronef: 'drone', droneamp: 'drone',
+  split: 'mic split', band: 'output band', miclim: 'limiter',
   ava: 'retreat', avb: 'advance', pharynx: 'pharynx', hymn: 'hymn',
   throat: 'throat', call: 'call', body: 'body',
   fbank: 'filter bank', verb: 'room', outcomp: 'compressor'
 };
 const DESK_FALLBACK = [
   ['ear', 'q'], ['ear', 'tilt'], ['ear', 'follow'],
+  ['drone', 'tune'], ['dronef', 'cutoff'], ['droneamp', 'gain'],
   ['band', 'cutoff'], ['band', 'q'],
   ['miclim', 'threshold'], ['miclim', 'ratio'],
   ['ava', 'bias'], ['avb', 'bias'],
@@ -1551,6 +1556,8 @@ mod tests {
         assert!(s.map.cables.iter().any(|c| c.feedback));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
+        assert!(s.desk.iter().any(|(m, k)| m == "drone" && k == "tune"));
+        assert!(s.desk.iter().any(|(m, k)| m == "droneamp" && k == "gain"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s
             .desk
@@ -1582,6 +1589,7 @@ mod tests {
         assert!(built.desk.is_empty());
         let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
+        assert!(s.desk.iter().any(|(m, k)| m == "drone" && k == "tune"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s
             .desk
@@ -1612,6 +1620,7 @@ mod tests {
         assert!(page.contains("throat"), "{page}");
         let state = get(&format!("{base}/api/state"));
         assert!(state.contains("\"module\":\"ear\""), "{state}");
+        assert!(state.contains("\"module\":\"drone\""), "{state}");
         assert!(state.contains("\"module\":\"throat\""), "{state}");
         assert!(state.contains("\"module\":\"call\""), "{state}");
         assert!(state.contains("\"module\":\"body\""), "{state}");

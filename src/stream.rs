@@ -618,10 +618,10 @@ mod tests {
             let e: f32 = slice.iter().map(|s| s * s).sum();
             rms.push((e / slice.len() as f32).sqrt());
         }
-        let quiet = rms.iter().filter(|r| **r < 0.008).count();
-        // The room and bank round the crest, so a squall is 0.02 against a
-        // 0.00005 floor rather than the sharper 0.03 the dry mix used to hit.
-        let hot = rms.iter().filter(|r| **r > 0.02).count();
+        // Quiet is the rolling bed, not digital silence. A drought sits
+        // on the drone; a squall still has to stand up above it.
+        let quiet = rms.iter().filter(|r| **r < 0.018).count();
+        let hot = rms.iter().filter(|r| **r > 0.028).count();
         let peak = left.iter().fold(0.0f32, |m, s| m.max(s.abs()));
         assert!(
             quiet >= 2,
@@ -666,9 +666,9 @@ mod tests {
         let labels: Vec<char> = rms
             .iter()
             .map(|r| {
-                if *r < 0.008 {
+                if *r < 0.018 {
                     'Q'
-                } else if *r > 0.02 {
+                } else if *r > 0.028 {
                     'B'
                 } else {
                     '.'
@@ -918,6 +918,61 @@ mod tests {
             body_hi > 1.25 * body_lo,
             "the chest never opened: {body_lo} .. {body_hi}"
         );
+    }
+
+    #[test]
+    fn weather_drone_rolls_in_the_bed() {
+        // The bed has to stay in the bottom and move. If pitch sits still
+        // the drone is a test tone; if it leaves the bass it is another call.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        assert!(labels.iter().any(|n| n == "drone[0]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "drone[1]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "dronef"), "{labels:?}");
+        let mut stream = Stream::new(built);
+        let names = [
+            "drone[0].freq",
+            "drone[1].freq",
+            "dronef.cutoff",
+            "droneamp.gain",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let mut f0_lo = f32::MAX;
+        let mut f0_hi = 0.0f32;
+        let mut cut_lo = f32::MAX;
+        let mut cut_hi = 0.0f32;
+        let mut gain_lo = f32::MAX;
+        let mut beat = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..5000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            f0_lo = f0_lo.min(now[0]);
+            f0_hi = f0_hi.max(now[0]);
+            cut_lo = cut_lo.min(now[2]);
+            cut_hi = cut_hi.max(now[2]);
+            gain_lo = gain_lo.min(now[3]);
+            beat = beat.max((now[0] - now[1]).abs());
+        }
+        assert!(
+            f0_lo > 20.0 && f0_hi < 120.0,
+            "the bed left the bass: {f0_lo} .. {f0_hi}"
+        );
+        assert!(
+            f0_hi > 1.04 * f0_lo,
+            "the bed never rolled: {f0_lo} .. {f0_hi}"
+        );
+        assert!(beat > 0.4, "the two sines sat on one pitch: beat {beat}");
+        assert!(
+            cut_hi > 1.15 * cut_lo,
+            "the bed ladder never walked: {cut_lo} .. {cut_hi}"
+        );
+        assert!(gain_lo > 0.03, "the bed shut: {gain_lo}");
     }
 
     #[test]

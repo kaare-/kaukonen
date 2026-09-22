@@ -47,6 +47,11 @@
 # sits on the mix before the bank — dark at rest, it opens with the
 # afterglow and the stretch so a squall is a chest, not a beep.
 #
+# Under all of that, a pair of slightly detuned low sines is the bed.
+# A dark ladder rolls them with the tide — a slow beating drone in the
+# bottom, always there, a little louder when the weather is up. Droughts
+# are that bed, not digital silence.
+#
 # After that window, an eight-band fixed filter bank (ADDAC 601 centres)
 # colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
 # A small room — short pre-delay into four combs and two allpasses —
@@ -58,7 +63,7 @@
 # call and the grit clocks, air tilts the bank. Place and loudness
 # join the tide. Those bands never reach the converter.
 # A tunable compressor sits on the stereo mix after the room.
-# The live page desk pins the ear, the output band, the command
+# The live page desk pins the ear, the drone, the output band, the command
 # pair, the pharynx, the throat, the call, the body, the filter bank,
 # the room, the limiter and the compressor.
 #
@@ -113,6 +118,9 @@
 #   set ear.tilt -0.4         # − leans rumble into the sky, + leans air into the grit
 #   set ear.follow 0.12       # how slowly the hairs track; rumble is slower still
 #   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
+#   set drone.tune 41         # the bed; 32 is a rumble, 55 is a tone
+#   set dronef.cutoff 70      # how open the bed is; 40 is a chest, 160 is a pad
+#   set droneamp.gain 0.12    # the quiet floor; 0.04 is a hint, 0.25 sits up
 #   set throat.cutoff 200     # growl; hymn opens it. 80 is a chest, 500 is a cry
 #   set call.cutoff 280       # the plucked mouth; 150 is a moan, 800 is a chirp
 #   set body.cutoff 180       # the stereo chest; afterglow opens it
@@ -133,6 +141,7 @@ seconds 12
 seed 23
 mismatch 0.06
 desk ear.q ear.tilt ear.follow
+desk drone.tune dronef.cutoff droneamp.gain
 desk band.cutoff band.q
 desk miclim.threshold miclim.ratio
 desk ava.bias avb.bias pharynx.bias pharynx.rate hymn.decay
@@ -210,6 +219,10 @@ module crawl    mix       a0=0.075 a1=-0.065 a2=0.05 a3=0.035
 module hum      mix       a0=0.16 a1=0.10 a2=0.06 a3=0.04 level=0.8
 module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
 module osc      vco       tune=74 fm_depth=22 pwm_depth=0.1 level=2.6
+module drone    vco[2]    tune=41.2 fm_depth=0.9 pwm_depth=0.05 level=1.85
+module dronef   vcf       cutoff=78 resonance=0.34 cv_depth=0.65 res_depth=0.04 drive=1.05 level=1.0
+module droneamp vca       response=linear gain=0.08 cv_depth=0.14 level=1.0
+module roll     mix       a0=0.08 a1=0.06 a2=0.04 a3=0.03
 module throat   vcf       cutoff=200 resonance=0.78 cv_depth=1.15 res_depth=0.1 drive=1.7 level=1.15
 module throatcv mix       a0=0.38 a1=0.20 a2=0.16 a3=-0.08
 module call     vcf       cutoff=280 resonance=0.82 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.1
@@ -225,8 +238,8 @@ module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
 module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
 module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
 module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
-module end      mix[2]    a0=0.48 a1=0.72 level=0.95
-module fbank    fbank[2]  sub=1.2 bass=1.22 low=1.05 lowmid=0.78 mid=0.7 highmid=0.72 high=0.82 air=0.62 q=1.8 tilt=-0.08 tilt_depth=0.2 q_depth=0.08 mix=0.5 level=1.15
+module end      mix[2]    a0=0.44 a1=0.66 a2=0.20 level=0.95
+module fbank    fbank[2]  sub=1.32 bass=1.24 low=1.05 lowmid=0.76 mid=0.68 highmid=0.70 high=0.80 air=0.58 q=1.8 tilt=-0.14 tilt_depth=0.2 q_depth=0.08 mix=0.5 level=1.15
 module verb     verb[2]   time=0.09 decay=0.42 damp=0.42 size=0.78 mix=0.24 time_depth=0.012 decay_depth=0.08 level=1.0
 module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.12 mix=1
 module dac      audioout  rate=48000 level=0.30
@@ -261,6 +274,7 @@ knob pharynx[2].rate 38
 knob pharynx[0].bias 1.42
 knob pharynx[1].bias 1.52
 knob pharynx[2].bias 1.40
+knob drone[1].tune 42.05
 
 # The sky is the climate. Its mix is the weather voltage.
 # Any cell can open a squall — if only sky[0] gates it, the doors
@@ -620,6 +634,21 @@ patch left.out     -> end[0].in0
 patch band[0].bp   -> end[0].in1
 patch right.out    -> end[1].in0
 patch band[1].bp   -> end[1].in1
+# A slowly rolling bed under the weather. Two low sines beat; the
+# tide walks their pitch and the ladder. The doors do not shut it.
+patch drone[0].sine -> dronef.in
+patch drone[1].sine -> dronef.in
+patch tide[0].out   -> roll.in0
+patch tide[1].out   -> roll.in1
+patch season.out    -> roll.in2
+patch after.out     -> roll.in3
+patch roll.out      -> drone[*].v_oct
+patch roll.out      -> dronef.cutoff_cv
+patch roll.out      -> droneamp.cv
+patch sand.a        -> drone[0].pwm
+patch sand.b        -> drone[1].pwm
+patch dronef.out    -> droneamp.in
+patch droneamp.out  -> end[*].in2
 patch end[0].out   -> body[0].in
 patch end[1].out   -> body[1].in
 patch after.out    -> bodycv.in0
@@ -643,4 +672,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone[0].freq dronef.cutoff droneamp.gain fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
