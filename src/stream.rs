@@ -636,6 +636,71 @@ mod tests {
     }
 
     #[test]
+    fn weather_soak_has_slow_and_burst_epochs() {
+        // A twelve-second soak has to turn over more than once: at least
+        // two squalls, and a drought that is not the whole run. If the
+        // doors die after the first swell, or never shut, the climate
+        // is a one-shot.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut stream = Stream::new(built(&text));
+        let block = 512;
+        let channels = 2;
+        let windows = 48; // 0.25 s, twelve seconds
+        let frames_per_window = 12_000;
+        let mut buffer = vec![0.0f32; block * channels];
+        let mut left = Vec::with_capacity(windows * frames_per_window);
+        while left.len() < windows * frames_per_window {
+            stream.process(&mut buffer, channels);
+            for frame in 0..block {
+                left.push(buffer[frame * channels]);
+            }
+        }
+        left.truncate(windows * frames_per_window);
+
+        let mut rms = Vec::with_capacity(windows);
+        for w in 0..windows {
+            let slice = &left[w * frames_per_window..(w + 1) * frames_per_window];
+            let e: f32 = slice.iter().map(|s| s * s).sum();
+            rms.push((e / slice.len() as f32).sqrt());
+        }
+        let labels: Vec<char> = rms
+            .iter()
+            .map(|r| {
+                if *r < 0.008 {
+                    'Q'
+                } else if *r > 0.02 {
+                    'B'
+                } else {
+                    '.'
+                }
+            })
+            .collect();
+        let mut burst_runs = 0usize;
+        let mut quiet_runs = 0usize;
+        let mut i = 0;
+        while i < labels.len() {
+            let mut j = i + 1;
+            while j < labels.len() && labels[j] == labels[i] {
+                j += 1;
+            }
+            match labels[i] {
+                'B' => burst_runs += 1,
+                'Q' if j - i >= 2 => quiet_runs += 1,
+                _ => {}
+            }
+            i = j;
+        }
+        let second = &rms[windows / 2..];
+        let late_life = second.iter().any(|r| *r > 0.012);
+        assert!(
+            burst_runs >= 2,
+            "only {burst_runs} burst epoch(s), rms={rms:?}"
+        );
+        assert!(quiet_runs >= 2, "only {quiet_runs} drought(s), rms={rms:?}");
+        assert!(late_life, "the second half never woke: {:?}", second);
+    }
+
+    #[test]
     fn weather_grains_tick_finer_than_the_sky() {
         // The granulator is RC-1 clocks into short neuron-gated windows.
         // Those clocks have to fire more often than the climate, or the

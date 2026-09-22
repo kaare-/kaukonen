@@ -57,14 +57,14 @@
 #   (256 is often fine; raise --block if `late` climbs)
 #   then Capture on the page, or `input on` at the console.
 #
-#   kaukonen render --patch patches/weather.kpatch --seconds 12 \
+#   kaukonen render --patch patches/weather.kpatch --seconds 24 \
 #       --out out/weather.wav --html out/weather.html --stride 16
 #
 # Things worth turning first:
 #
 #   set sky.bias 2.4          # 1.8 is a long drought, 2.6 is almost always raining
-#   set sky.rate 5            # how slowly the climate turns
-#   set sky.drift 0.18        # wander that puts a cell in and out of bursting
+#   set sky.rate 4            # how slowly the climate turns; cells are staggered
+#   set sky.drift 0.22        # wander that puts a cell in and out of bursting
 #   set rain.bias 1.35        # the audible bank; keep it hungry so it needs the sky
 #   set rain.rate 200
 #   set fan.a0 0.16           # how hard a squall current-drives the rain
@@ -125,18 +125,18 @@ module adc      audioin   gain=1.5 env_rate=10
 module miclim   comp      threshold=1.05 ratio=20 attack=0.0004 release=0.08 knee=0.15 makeup=1 mix=1
 module split    svf       cutoff=850 q=0.52 drive=1.1 level=1.0
 module micenv   env[3]    mode=follow attack=0.012 decay=0.16 level=5
-module sky      rc1[4]    preset=burst rate=7 noise=0.035 drift=0.14 bias=2.05 output_gain=2.2
-module rain     rc1[6]    preset=burst rate=170 noise=0.02 bias=1.45 output_gain=2
+module sky      rc1[4]    preset=burst rate=5 noise=0.04 drift=0.26 bias=2.08 output_gain=2.3 adaptation_rate=0.01
+module rain     rc1[6]    preset=burst rate=170 noise=0.02 bias=1.40 output_gain=2
 module ring     rc1[4]    preset=burst rate=64 noise=0.02 bias=1.7 output_gain=2
 module hops     mix[4]    a0=0.11 a1=0.1 a2=0.04 a3=0.07
 module a        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.18 rate=58 output_gain=2.2
 module b        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.12 rate=66 output_gain=2.2
-module grit     rc1[4]    preset=burst rate=420 noise=0.04 bias=1.42 output_gain=2.1
+module grit     rc1[4]    preset=burst rate=420 noise=0.04 bias=1.48 output_gain=2.1
 module flake    env[4]    mode=ad attack=0.0008 decay=0.014 threshold=1.45 level=5
 module sift     neuron[4] w0=0.48 w1=0.85 w2=0.22 leak=12 gain=3.4 response=0.75
 module sand     tc3       rule=oja gamma=0.45 scaling=0.55 target_norm=1.05 activity_gain=0.35
 module poke     mix[4]    a0=1.0 a1=0.11 a2=0.07 a3=-0.08
-module echo     mix[4]    a0=0.055 a1=0.07 a2=0.10 a3=0.04
+module echo     mix[4]    a0=0.08 a1=0.08 a2=0.11 a3=0.05
 module write    mix[4]    a0=0.05 a1=0.12 a2=0 a3=0 level=1.2
 module recoil   mix       a0=0.08 a1=-0.055 a2=0.045 a3=0.04
 module layer    neuron[3] w0=0.5 w1=0.3 w2=0.22 leak=10 gain=3.2 response=0.7
@@ -144,7 +144,7 @@ module hear     neuron    w0=0.4 w1=0.35 leak=12 gain=3 response=0.7
 module see      neuron    w0=0.4 w1=0.3 leak=8 gain=3.2 response=0.7
 module brain    tc3       rule=bcm theta_rate=2.5 natural_decay=0.25 scaling=2.2 target_norm=0.9 activity_gain=2 w_max=1.4 w_min=-1.4
 module cortex   tc3       rule=oja gamma=0.5 scaling=0.8 target_norm=1.0 activity_gain=0.15
-module gust     mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.9
+module gust     mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 offset=2.65 level=1.0
 module rainbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0 level=0.85
 module rainbox2 mix       a0=0.7 a1=0.65 a2=0 a3=0 level=0.85
 module shower   mix       a0=0.55 a1=0.5 level=0.8
@@ -153,9 +153,9 @@ module bed      mix       a0=0.7 a1=0.4 level=0.85
 module cross    mix       a0=0.32 a1=-0.32 a2=0 a3=0
 module teach    mix       a0=0.3 a1=0.12 a2=0.1 a3=0
 module sense    mix       a0=0.2 a1=0 a2=0 a3=0
-module fan      mix       a0=0.14 a1=0.1 a2=0.03 a3=0.05
+module fan      mix       a0=0.16 a1=0.1 a2=0.03 a3=0.05
 module tug      mix       a0=0.08 a1=0.1 a2=0.06 a3=0.04
-module swell    mix       a0=0.5 a1=0.28 a2=0.35 a3=0 level=1.15
+module swell    mix       a0=0.70 a1=0.32 a2=0.35 a3=0 level=1.15
 module open     mix       a0=2 a1=0.35 a2=-0.22 a3=0 level=3.5
 module lift     mix       a0=0.8 a1=0.35 a2=0.25 a3=0.18 offset=0.9 level=0.65
 module pace     mix       a0=0.4 a1=0.15 a2=0.18 a3=0.12
@@ -163,7 +163,7 @@ module stir     mix       a0=0.11 a1=0.08 a2=0.035 a3=-0.04 offset=0.03
 module grain    mix       a0=0.7 a1=0.7 a2=0.7 a3=0.7 level=0.85
 module sieve    mix       a0=0.55 a1=0.5 a2=0.45 a3=0.4 level=0.8
 module tint     mix       a0=0.25 a1=0.16 a2=0.18 a3=0.12 offset=0.55 level=0.55
-module roomcv   mix       a0=1.2 a1=-0.22 a2=-0.10 a3=0.14 level=1.0
+module roomcv   mix       a0=1.35 a1=-0.14 a2=-0.08 a3=0.18 level=1.0
 module paircv   mix       a0=1.0 a1=-0.22 a2=0.2 a3=0.12 level=1.0
 module dustcv   mix       a0=1.0 a1=-0.26 a2=0.12 a3=-0.14 level=1.0
 module tonecv   mix       a0=1.0 a1=-0.42 a2=0.14 a3=-0.2 level=1.0
@@ -172,19 +172,19 @@ module left     mix       a0=1.0 a1=0.45 a2=0.22 a3=0.28 level=0.9
 module right    mix       a0=0.75 a1=0.7 a2=0.18 a3=0.34 level=0.9
 module decay    source    shape=dc volts=0.14
 module hiss     noise     level=0.7
-module squall   env       mode=ad attack=0.02 decay=1.8 threshold=1.4 level=5
+module squall   env       mode=ad attack=0.03 decay=2.2 threshold=0.95 level=5
 module tick     env       mode=ad attack=0.002 decay=0.16 threshold=1.5 level=5
-module cloud    env       mode=ad attack=0.012 decay=0.22 threshold=1.55 level=5
-module after    env       mode=ad attack=0.18 decay=0.75 threshold=2.2 level=5
-module ava      rc1       preset=subthreshold leak=0 adaptation_rate=0.01 bias=2.72 rate=18 output_gain=2.0
-module avb      rc1       preset=subthreshold leak=0 adaptation_rate=0.01 bias=2.64 rate=26 output_gain=2.0
+module cloud    env       mode=ad attack=0.012 decay=0.35 threshold=1.55 level=5
+module after    env       mode=ad attack=0.22 decay=1.15 threshold=1.9 level=5
+module ava      rc1       preset=subthreshold leak=0 adaptation_rate=0.014 bias=2.70 rate=16 output_gain=2.0
+module avb      rc1       preset=subthreshold leak=0 adaptation_rate=0.014 bias=2.62 rate=22 output_gain=2.0
 module drive    mix       a0=0.12 a1=-0.12 a2=0.08 a3=-0.07
 module pharynx  rc1[3]    preset=burst rate=42 noise=0.03 bias=1.52 output_gain=2.0
 module gulp     mix[3]    a0=0.12 a1=0.09 a2=0.05 a3=-0.08
 module song     mix       a0=0.55 a1=0.5 a2=0.45 level=0.85
 module hymn     env       mode=ad attack=0.03 decay=0.4 threshold=1.7 level=5
 module stretch  env[2]    mode=follow attack=0.018 decay=0.14 level=4
-module nibble   mix       a0=-0.10 a1=-0.08 a2=0.09 a3=0.04
+module nibble   mix       a0=-0.07 a1=-0.08 a2=0.09 a3=0.04
 module crawl    mix       a0=0.075 a1=-0.065 a2=0.05 a3=0.035
 module hum      mix       a0=0.16 a1=0.10 a2=0.06 a3=0.04 level=0.8
 module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
@@ -202,7 +202,7 @@ module end      mix[2]    a0=0.48 a1=0.72 level=0.95
 module fbank    fbank[2]  sub=1.05 bass=1.1 low=0.95 lowmid=0.72 mid=0.68 highmid=0.88 high=1.18 air=1.28 q=2.0 tilt=0.12 tilt_depth=0.22 q_depth=0.08 mix=0.55 level=1.2
 module verb     verb[2]   time=0.08 decay=0.35 damp=0.32 size=0.8 mix=0.16 time_depth=0.012 decay_depth=0.08 level=1.0
 module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.12 mix=1
-module dac      audioout  rate=48000 level=0.30
+module dac      audioout  rate=48000 level=0.32
 
 knob flake[0].decay 0.008
 knob flake[1].decay 0.012
@@ -212,10 +212,18 @@ knob grit[0].rate 380
 knob grit[1].rate 450
 knob grit[2].rate 530
 knob grit[3].rate 620
-knob grit[0].bias 1.38
-knob grit[1].bias 1.46
-knob grit[2].bias 1.34
-knob grit[3].bias 1.50
+knob grit[0].bias 1.44
+knob grit[1].bias 1.52
+knob grit[2].bias 1.40
+knob grit[3].bias 1.56
+knob sky[0].bias 2.22
+knob sky[1].bias 1.96
+knob sky[2].bias 2.14
+knob sky[3].bias 2.00
+knob sky[0].rate 4.2
+knob sky[1].rate 5.6
+knob sky[2].rate 6.8
+knob sky[3].rate 3.5
 knob pharynx[0].rate 32
 knob pharynx[1].rate 44
 knob pharynx[2].rate 58
@@ -224,11 +232,13 @@ knob pharynx[1].bias 1.58
 knob pharynx[2].bias 1.44
 
 # The sky is the climate. Its mix is the weather voltage.
+# Any cell can open a squall — if only sky[0] gates it, the doors
+# die once that cell adapts, and a soak has no second burst.
 patch sky[0].out -> gust.in0
 patch sky[1].out -> gust.in1
 patch sky[2].out -> gust.in2
 patch sky[3].out -> gust.in3
-patch sky[0].out -> squall.gate
+patch gust.out   -> squall.gate
 
 # Rain is hungry. It only fires when the sky, speech, or the memory
 # push current through the fan.
