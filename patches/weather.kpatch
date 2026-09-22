@@ -39,6 +39,12 @@
 # large window, not another resonant ping, and a little of the dry mix
 # stays so the climate body is still there.
 #
+# The creature has a mouth. A CV ladder on the pharynx is the throat:
+# closed it is a growl, the hymn opens it into a cry. The plucked
+# tone goes through a second ladder (the call). A stereo body filter
+# sits on the mix before the bank — dark at rest, it opens with the
+# afterglow and the stretch so a squall is a chest, not a beep.
+#
 # After that window, an eight-band fixed filter bank (ADDAC 601 centres)
 # colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
 # A small room — short pre-delay into four combs and two allpasses —
@@ -50,8 +56,8 @@
 # mid leans on the rain and the ring, high tickles the grit clocks.
 # A tunable compressor sits on the stereo mix after the room.
 # The live page desk pins the mic split, the output band, the command
-# pair, the pharynx, the filter bank, the room, the limiter and the
-# compressor.
+# pair, the pharynx, the throat, the call, the body, the filter bank,
+# the room, the limiter and the compressor.
 #
 #   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
 #   (256 is often fine; raise --block if `late` climbs)
@@ -98,7 +104,10 @@
 #   set bandcv.a0 0.28        # how far sand walks the band
 #   set split.cutoff 700      # mic crossover; lower puts more speech into the sky
 #   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
-#   set fbank.air 1.4         # 11 kHz band; 0 is dark, 2 is hiss
+#   set throat.cutoff 200     # growl; hymn opens it. 80 is a chest, 500 is a cry
+#   set call.cutoff 280       # the plucked mouth; 150 is a moan, 800 is a chirp
+#   set body.cutoff 180       # the stereo chest; afterglow opens it
+#   set fbank.air 0.6         # 11 kHz band; keep it down for fur, not hiss
 #   set fbank.mid 0.4         # scoop the 1.1 kHz band
 #   set fbank.tilt 0.6        # + lifts the air, − lifts the sub
 #   set verb.mix 0.3          # how much room; 0.5 is a cave
@@ -117,6 +126,7 @@ mismatch 0.06
 desk split.cutoff split.q band.cutoff band.q
 desk miclim.threshold miclim.ratio
 desk ava.bias avb.bias pharynx.bias pharynx.rate hymn.decay
+desk throat.cutoff call.cutoff body.cutoff
 desk fbank.sub fbank.lowmid fbank.mid fbank.air fbank.tilt fbank.mix
 desk verb.time verb.decay verb.mix
 desk outcomp.threshold outcomp.ratio outcomp.attack outcomp.release
@@ -188,10 +198,16 @@ module nibble   mix       a0=-0.07 a1=-0.08 a2=0.09 a3=0.04
 module crawl    mix       a0=0.075 a1=-0.065 a2=0.05 a3=0.035
 module hum      mix       a0=0.16 a1=0.10 a2=0.06 a3=0.04 level=0.8
 module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
-module osc      vco       tune=92 fm_depth=28 pwm_depth=0.08 level=2.8
-module room     vcf       cutoff=760 resonance=0.42 cv_depth=0.7 res_depth=0.06 drive=1.3
-module air      vcf       cutoff=520 resonance=0.95 cv_depth=0.85 res_depth=0.1 drive=1.4
-module dust     vcf       cutoff=1800 resonance=1.04 cv_depth=0.7 res_depth=0.1 drive=1.25
+module osc      vco       tune=74 fm_depth=22 pwm_depth=0.1 level=2.6
+module throat   vcf       cutoff=240 resonance=0.78 cv_depth=1.15 res_depth=0.1 drive=1.7 level=1.15
+module throatcv mix       a0=0.38 a1=0.20 a2=0.16 a3=-0.08
+module call     vcf       cutoff=310 resonance=0.82 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.1
+module callcv   mix       a0=0.55 a1=0.22 a2=0.16 a3=0.10
+module body     vcf[2]    cutoff=260 resonance=0.36 cv_depth=1.25 res_depth=0.05 drive=1.15 level=1.05
+module bodycv   mix       a0=0.52 a1=0.18 a2=0.16 a3=0.10
+module room     vcf       cutoff=480 resonance=0.55 cv_depth=0.9 res_depth=0.08 drive=1.35
+module air      vcf       cutoff=360 resonance=0.88 cv_depth=0.95 res_depth=0.1 drive=1.45
+module dust     vcf       cutoff=980 resonance=0.92 cv_depth=0.75 res_depth=0.1 drive=1.25
 module roomamp  vca       response=exponential gain=0.03 cv_depth=1.05
 module pairamp  vca       response=exponential gain=0.0 cv_depth=1.15
 module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
@@ -199,8 +215,8 @@ module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
 module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
 module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
 module end      mix[2]    a0=0.48 a1=0.72 level=0.95
-module fbank    fbank[2]  sub=1.05 bass=1.1 low=0.95 lowmid=0.72 mid=0.68 highmid=0.88 high=1.18 air=1.28 q=2.0 tilt=0.12 tilt_depth=0.22 q_depth=0.08 mix=0.55 level=1.2
-module verb     verb[2]   time=0.08 decay=0.35 damp=0.32 size=0.8 mix=0.16 time_depth=0.012 decay_depth=0.08 level=1.0
+module fbank    fbank[2]  sub=1.2 bass=1.22 low=1.05 lowmid=0.78 mid=0.7 highmid=0.72 high=0.82 air=0.62 q=1.8 tilt=-0.08 tilt_depth=0.2 q_depth=0.08 mix=0.5 level=1.15
+module verb     verb[2]   time=0.06 decay=0.32 damp=0.48 size=0.72 mix=0.18 time_depth=0.01 decay_depth=0.08 level=1.0
 module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.12 mix=1
 module dac      audioout  rate=48000 level=0.32
 
@@ -327,8 +343,9 @@ patch nibble.inv       -> grit[*].in
 
 # Three-cell pharynx. Neighbour coupling walks a swallow; advance
 # current-drives it; the hymn and retreat inhibit it so it does not
-# lock. The song is the throat voltage; it sits in the room body,
-# FM's the plucked tone, and leans the bank.
+# lock. The song is the raw throat voltage. A CV ladder is the mouth:
+# hymn and stretch open it, retreat closes it. The filtered cry sits
+# in the room. Hum still FM's the plucked tone and leans the bank.
 patch pharynx[0].out -> gulp[1].in0
 patch pharynx[1].out -> gulp[2].in0
 patch pharynx[2].out -> gulp[0].in0
@@ -346,21 +363,36 @@ patch song.out       -> hum.in0
 patch hymn.out       -> hum.in1
 patch avb.out        -> hum.in2
 patch stretch[0].out -> hum.in3
-patch hum.out        -> room.in
+patch song.out       -> throat.in
+patch hymn.out       -> throatcv.in0
+patch stretch[0].out -> throatcv.in1
+patch avb.out        -> throatcv.in2
+patch ava.out        -> throatcv.in3
+patch throatcv.out   -> throat.cutoff_cv
+patch hymn.out       -> throat.res_cv
+patch throat.out     -> room.in
 patch hum.out        -> osc.fm
 patch hum.out        -> fbank[*].tilt_cv
 patch hum.out        -> verb[*].time_cv
 patch bed.out        -> stretch[0].gate
 patch a.out          -> stretch[1].gate
 
-# A tone that only exists for the length of a rain tick.
+# A tone that only exists for the length of a rain tick. It goes
+# through a mouth, not straight to the VCA.
 patch rain[2].out -> pace.in0
 patch micenv[1].out -> pace.in1
 patch after.out   -> pace.in2
 patch sieve.out   -> pace.in3
 patch pace.out    -> osc.fm
 patch sand.c      -> osc.pwm
-patch osc.tri     -> toneamp.in
+patch osc.tri     -> call.in
+patch tonecv.out  -> callcv.in0
+patch after.out   -> callcv.in1
+patch hymn.out    -> callcv.in2
+patch stretch[0].out -> callcv.in3
+patch callcv.out  -> call.cutoff_cv
+patch tick.out    -> call.res_cv
+patch call.out    -> toneamp.in
 patch tick.out    -> tonecv.in0
 patch grain.out   -> tonecv.in1
 patch sand.a      -> tonecv.in2
@@ -565,8 +597,16 @@ patch left.out     -> end[0].in0
 patch band[0].bp   -> end[0].in1
 patch right.out    -> end[1].in0
 patch band[1].bp   -> end[1].in1
-patch end[0].out   -> fbank[0].in
-patch end[1].out   -> fbank[1].in
+patch end[0].out   -> body[0].in
+patch end[1].out   -> body[1].in
+patch after.out    -> bodycv.in0
+patch stretch[0].out -> bodycv.in1
+patch hymn.out     -> bodycv.in2
+patch sand.activity -> bodycv.in3
+patch bodycv.out   -> body[*].cutoff_cv
+patch cloud.out    -> body[*].res_cv
+patch body[0].out  -> fbank[0].in
+patch body[1].out  -> fbank[1].in
 patch sand.activity -> fbank[*].tilt_cv
 patch grain.out     -> fbank[*].res_cv
 patch fbank[0].out -> verb[0].in
@@ -578,4 +618,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env micenv[0].out micenv[1].out micenv[2].out miclim.gr outcomp[0].gain sky[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain

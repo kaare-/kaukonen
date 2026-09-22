@@ -861,6 +861,66 @@ mod tests {
     }
 
     #[test]
+    fn weather_creature_mouths_walk() {
+        // The throat, the call and the chest have to open. If their
+        // cutoffs sit still the creature is a fixed tone control.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        assert!(labels.iter().any(|n| n == "throat"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "call"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "body[0]"), "{labels:?}");
+        let kinds: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.get(ModuleId(i)).kind_name())
+            .collect();
+        let vcf = labels
+            .iter()
+            .zip(&kinds)
+            .filter(|(_, k)| **k == "vcf")
+            .map(|(n, _)| n.as_str())
+            .collect::<Vec<_>>();
+        assert!(vcf.contains(&"throat"), "{vcf:?}");
+        assert!(vcf.contains(&"call"), "{vcf:?}");
+        assert!(vcf.contains(&"body[0]"), "{vcf:?}");
+        let mut stream = Stream::new(built);
+        let names = ["throat.cutoff", "call.cutoff", "body[0].cutoff"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut throat_lo = f32::MAX;
+        let mut throat_hi = 0.0f32;
+        let mut call_lo = f32::MAX;
+        let mut call_hi = 0.0f32;
+        let mut body_lo = f32::MAX;
+        let mut body_hi = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..6000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            throat_lo = throat_lo.min(now[0]);
+            throat_hi = throat_hi.max(now[0]);
+            call_lo = call_lo.min(now[1]);
+            call_hi = call_hi.max(now[1]);
+            body_lo = body_lo.min(now[2]);
+            body_hi = body_hi.max(now[2]);
+        }
+        assert!(
+            throat_hi > 1.3 * throat_lo,
+            "the throat never opened: {throat_lo} .. {throat_hi}"
+        );
+        assert!(
+            call_hi > 1.2 * call_lo,
+            "the call never opened: {call_lo} .. {call_hi}"
+        );
+        assert!(
+            body_hi > 1.25 * body_lo,
+            "the chest never opened: {body_lo} .. {body_hi}"
+        );
+    }
+
+    #[test]
     fn weather_has_a_filterbank_and_a_room() {
         // The last colour is a fixed bank and a short room. If those
         // modules are missing the output is just the old band+comp.

@@ -166,6 +166,9 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("pharynx", "bias"),
         ("pharynx", "rate"),
         ("hymn", "decay"),
+        ("throat", "cutoff"),
+        ("call", "cutoff"),
+        ("body", "cutoff"),
         ("fbank", "sub"),
         ("fbank", "lowmid"),
         ("fbank", "mid"),
@@ -1048,6 +1051,7 @@ function render(state) {
 const DESK_LABEL = {
   split: 'mic split', band: 'output band', miclim: 'limiter',
   ava: 'retreat', avb: 'advance', pharynx: 'pharynx', hymn: 'hymn',
+  throat: 'throat', call: 'call', body: 'body',
   fbank: 'filter bank', verb: 'room', outcomp: 'compressor'
 };
 const DESK_FALLBACK = [
@@ -1056,6 +1060,7 @@ const DESK_FALLBACK = [
   ['miclim', 'threshold'], ['miclim', 'ratio'],
   ['ava', 'bias'], ['avb', 'bias'],
   ['pharynx', 'bias'], ['pharynx', 'rate'], ['hymn', 'decay'],
+  ['throat', 'cutoff'], ['call', 'cutoff'], ['body', 'cutoff'],
   ['fbank', 'sub'], ['fbank', 'lowmid'], ['fbank', 'mid'],
   ['fbank', 'air'], ['fbank', 'tilt'], ['fbank', 'mix'],
   ['verb', 'time'], ['verb', 'decay'], ['verb', 'mix'],
@@ -1532,6 +1537,9 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "avb"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "pharynx"));
         assert!(s.map.nodes.iter().any(|n| n.name == "hymn"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "throat"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "call"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "body"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "stretch"));
         assert!(s.map.nodes.iter().any(|n| n.name == "miclim"));
         assert!(s.map.nodes.iter().any(|n| n.name == "split"));
@@ -1547,6 +1555,9 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "ava" && k == "bias"));
         assert!(s.desk.iter().any(|(m, k)| m == "pharynx" && k == "rate"));
         assert!(s.desk.iter().any(|(m, k)| m == "hymn" && k == "decay"));
+        assert!(s.desk.iter().any(|(m, k)| m == "throat" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "call" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "body" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
@@ -1574,6 +1585,9 @@ mod tests {
             .any(|(m, k)| m == "miclim" && k == "threshold"));
         assert!(s.desk.iter().any(|(m, k)| m == "ava" && k == "bias"));
         assert!(s.desk.iter().any(|(m, k)| m == "pharynx" && k == "rate"));
+        assert!(s.desk.iter().any(|(m, k)| m == "throat" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "call" && k == "cutoff"));
+        assert!(s.desk.iter().any(|(m, k)| m == "body" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
@@ -1591,8 +1605,12 @@ mod tests {
         assert!(page.contains("mic split"), "{page}");
         assert!(page.contains("filter bank"), "{page}");
         assert!(page.contains("retreat"), "{page}");
+        assert!(page.contains("throat"), "{page}");
         let state = get(&format!("{base}/api/state"));
         assert!(state.contains("\"module\":\"split\""), "{state}");
+        assert!(state.contains("\"module\":\"throat\""), "{state}");
+        assert!(state.contains("\"module\":\"call\""), "{state}");
+        assert!(state.contains("\"module\":\"body\""), "{state}");
         assert!(state.contains("\"module\":\"fbank\""), "{state}");
         assert!(state.contains("\"module\":\"verb\""), "{state}");
         assert!(state.contains("\"module\":\"outcomp\""), "{state}");
