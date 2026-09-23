@@ -34,7 +34,11 @@
 # is also a proprioceptive input. A two-cell tide wanders on a
 # minute scale and leans the sky, the chest and the room, so a
 # half-hour pass is not the first two minutes played six times.
-# The climate is a small nervous system that hears itself.
+# A slow BCM connectome (the trace) watches the rain, the pharynx
+# and the pair. It only imprints while a squall or a hymn is up,
+# and it forgets on a minute scale, so a later drought still
+# carries a little of who the rack was. The climate is a small
+# nervous system that hears itself, and remembers.
 #
 # A wide state-variable bandpass sits on the stereo mix at the end. The
 # climate walks its centre; a grain cloud briefly peaks the Q. It is a
@@ -63,9 +67,9 @@
 # call and the grit clocks, air tilts the bank. Place and loudness
 # join the tide. Those bands never reach the converter.
 # A tunable compressor sits on the stereo mix after the room.
-# The live page desk pins the ear, the drone, the output band, the command
-# pair, the pharynx, the throat, the call, the body, the filter bank,
-# the room, the limiter and the compressor.
+# The live page desk pins the ear, the drone, the trace, the output band,
+# the command pair, the pharynx, the throat, the call, the body, the
+# filter bank, the room, the limiter and the compressor.
 #
 # Leave it running. The tide and the slow sky are meant for a
 # thirty-minute ambient pass, not a two-minute demonstration.
@@ -121,6 +125,9 @@
 #   set drone.tune 41         # the bed; 32 is a rumble, 55 is a tone
 #   set dronef.cutoff 70      # how open the bed is; 40 is a chest, 160 is a pad
 #   set droneamp.gain 0.12    # the quiet floor; 0.04 is a hint, 0.25 sits up
+#   set trace.natural_decay 0.003  # how long a squall stays in the matrix; 0.02 is a minute
+#   set fade.volts 0.03       # the slow leak; 0 is a scar, 0.15 is sand
+#   set replay.a0 0.14        # how hard the memory writes back into the climate
 #   set throat.cutoff 200     # growl; hymn opens it. 80 is a chest, 500 is a cry
 #   set call.cutoff 280       # the plucked mouth; 150 is a moan, 800 is a chirp
 #   set body.cutoff 180       # the stereo chest; afterglow opens it
@@ -142,6 +149,7 @@ seed 23
 mismatch 0.06
 desk ear.q ear.tilt ear.follow
 desk drone.tune dronef.cutoff droneamp.gain
+desk trace.natural_decay fade.volts
 desk band.cutoff band.q
 desk miclim.threshold miclim.ratio
 desk ava.bias avb.bias pharynx.bias pharynx.rate hymn.decay
@@ -165,6 +173,10 @@ module grit     rc1[4]    preset=burst rate=420 noise=0.04 bias=1.48 output_gain
 module flake    env[4]    mode=ad attack=0.0008 decay=0.014 threshold=1.45 level=5
 module sift     neuron[4] w0=0.48 w1=0.85 w2=0.22 leak=12 gain=3.4 response=0.75
 module sand     tc3       rule=oja gamma=0.45 scaling=0.55 target_norm=1.05 activity_gain=0.35
+module trace    tc3       rule=bcm theta_rate=0.08 natural_decay=0.003 scaling=0.12 target_norm=1.15 activity_gain=0.55 activity_rate=8 drift=0.02 w_max=1.5 w_min=-1.1
+module stamp    mix       a0=0.55 a1=0.32 a2=0.18 a3=0.10
+module fade     source    shape=dc volts=0.03
+module replay   mix[3]    a0=0.09 a1=0 a2=0 a3=0
 module poke     mix[4]    a0=1.0 a1=0.11 a2=0.07 a3=-0.08
 module echo     mix[4]    a0=0.08 a1=0.08 a2=0.11 a3=0.05
 module write    mix[4]    a0=0.05 a1=0.12 a2=0 a3=0 level=1.2
@@ -369,6 +381,32 @@ patch nibble.out       -> rain[*].in
 patch nibble.inv       -> a.in
 patch nibble.inv       -> b.in
 patch nibble.inv       -> grit[*].in
+
+# A slow BCM matrix watches three distant slices — the rain, the
+# song, the pair — and only imprints while a squall, a hymn or the
+# body is up. It forgets on a minute scale. Replay writes the
+# reconstructed past back into the sky, the throat and the pair,
+# so a later drought still carries a little of who the rack was.
+patch shower.out       -> trace.a
+patch song.out         -> trace.b
+patch a.out            -> trace.c
+patch after.out        -> stamp.in0
+patch hymn.out         -> stamp.in1
+patch stretch[0].out   -> stamp.in2
+patch ear.loud         -> stamp.in3
+patch stamp.out        -> trace.learn
+patch fade.out         -> trace.forget
+patch trace.a          -> replay[0].in0
+patch trace.b          -> replay[1].in0
+patch trace.c          -> replay[2].in0
+patch replay[0].out    -> sky[*].in
+patch replay[0].out    -> drone[*].v_oct
+patch replay[1].out    -> gulp[*].in2
+patch replay[1].out    -> throat.cutoff_cv
+patch replay[2].out    -> a.in
+patch replay[2].out    -> b.in
+patch trace.activity   -> droneamp.cv
+patch trace.activity   -> roll.in3
 
 # Three-cell pharynx. Neighbour coupling walks a swallow; advance
 # current-drives it; the hymn and retreat inhibit it so it does not
@@ -672,4 +710,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone[0].freq dronef.cutoff droneamp.gain fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone[0].freq dronef.cutoff droneamp.gain trace.norm trace.activity trace.w00 replay[0].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain

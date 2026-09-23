@@ -233,6 +233,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                 .map(|n| match n.as_str() {
                     "ear" => "ear",
                     "drone" | "dronef" | "droneamp" => "drone",
+                    "trace" | "fade" => "trace",
                     "split" => "mic split",
                     "band" => "output band",
                     "miclim" => "limiter",

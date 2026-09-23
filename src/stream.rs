@@ -976,6 +976,78 @@ mod tests {
     }
 
     #[test]
+    fn weather_trace_remembers_old_activation() {
+        // A slow BCM matrix has to change, and its replay has to reach
+        // the climate. If the weights sit still the rack has no memory;
+        // if replay stays at rest the memory is only decoration.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        let kinds: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.get(ModuleId(i)).kind_name())
+            .collect();
+        assert!(labels.iter().any(|n| n == "trace"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "replay[0]"), "{labels:?}");
+        assert!(
+            labels
+                .iter()
+                .zip(&kinds)
+                .any(|(n, k)| n == "trace" && *k == "tc3"),
+            "{labels:?} {kinds:?}"
+        );
+        let mut stream = Stream::new(built);
+        let names = [
+            "trace.norm",
+            "trace.w00",
+            "trace.activity",
+            "replay[0].out",
+            "replay[1].out",
+            "replay[2].out",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let mut first_norm = None;
+        let mut norm_hi = 0.0f32;
+        let mut w_lo = f32::MAX;
+        let mut w_hi = f32::MIN;
+        let mut act_hi = 0.0f32;
+        let mut replay_hi = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for i in 0..7000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            if i == 80 {
+                first_norm = Some(now[0]);
+            }
+            norm_hi = norm_hi.max(now[0]);
+            w_lo = w_lo.min(now[1]);
+            w_hi = w_hi.max(now[1]);
+            act_hi = act_hi.max(now[2].abs());
+            replay_hi = replay_hi
+                .max(now[3].abs())
+                .max(now[4].abs())
+                .max(now[5].abs());
+        }
+        let first = first_norm.unwrap_or(0.0);
+        assert!(
+            (norm_hi - first).abs() > 0.04,
+            "the trace never learned: first {first} hi {norm_hi}"
+        );
+        assert!(
+            w_hi - w_lo > 0.04,
+            "a stored weight never moved: {w_lo} .. {w_hi}"
+        );
+        assert!(act_hi > 0.02, "the trace never reported activity: {act_hi}");
+        assert!(
+            replay_hi > 0.02,
+            "replay never wrote back into the climate: {replay_hi}"
+        );
+    }
+
+    #[test]
     fn weather_has_a_filterbank_and_a_room() {
         // The last colour is a fixed bank and a short room. If those
         // modules are missing the output is just the old band+comp.

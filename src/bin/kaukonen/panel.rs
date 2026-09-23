@@ -161,6 +161,8 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("drone", "tune"),
         ("dronef", "cutoff"),
         ("droneamp", "gain"),
+        ("trace", "natural_decay"),
+        ("fade", "volts"),
         ("band", "cutoff"),
         ("band", "q"),
         ("miclim", "threshold"),
@@ -1054,6 +1056,7 @@ function render(state) {
 
 const DESK_LABEL = {
   ear: 'ear', drone: 'drone', dronef: 'drone', droneamp: 'drone',
+  trace: 'trace', fade: 'trace',
   split: 'mic split', band: 'output band', miclim: 'limiter',
   ava: 'retreat', avb: 'advance', pharynx: 'pharynx', hymn: 'hymn',
   throat: 'throat', call: 'call', body: 'body',
@@ -1062,6 +1065,7 @@ const DESK_LABEL = {
 const DESK_FALLBACK = [
   ['ear', 'q'], ['ear', 'tilt'], ['ear', 'follow'],
   ['drone', 'tune'], ['dronef', 'cutoff'], ['droneamp', 'gain'],
+  ['trace', 'natural_decay'], ['fade', 'volts'],
   ['band', 'cutoff'], ['band', 'q'],
   ['miclim', 'threshold'], ['miclim', 'ratio'],
   ['ava', 'bias'], ['avb', 'bias'],
@@ -1551,6 +1555,8 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "miclim"));
         assert!(s.map.nodes.iter().any(|n| n.name == "ear"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "tide"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "trace"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "replay"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
@@ -1558,6 +1564,11 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "drone" && k == "tune"));
         assert!(s.desk.iter().any(|(m, k)| m == "droneamp" && k == "gain"));
+        assert!(s
+            .desk
+            .iter()
+            .any(|(m, k)| m == "trace" && k == "natural_decay"));
+        assert!(s.desk.iter().any(|(m, k)| m == "fade" && k == "volts"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s
             .desk
@@ -1590,6 +1601,10 @@ mod tests {
         let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
         assert!(s.desk.iter().any(|(m, k)| m == "drone" && k == "tune"));
+        assert!(s
+            .desk
+            .iter()
+            .any(|(m, k)| m == "trace" && k == "natural_decay"));
         assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
         assert!(s
             .desk
@@ -1621,6 +1636,7 @@ mod tests {
         let state = get(&format!("{base}/api/state"));
         assert!(state.contains("\"module\":\"ear\""), "{state}");
         assert!(state.contains("\"module\":\"drone\""), "{state}");
+        assert!(state.contains("\"module\":\"trace\""), "{state}");
         assert!(state.contains("\"module\":\"throat\""), "{state}");
         assert!(state.contains("\"module\":\"call\""), "{state}");
         assert!(state.contains("\"module\":\"body\""), "{state}");
