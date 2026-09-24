@@ -155,39 +155,24 @@ pub fn patch_has_audioin(built: &BuiltPatch) -> bool {
 /// Knobs a weather-like rack should keep at the top even without a `desk` line.
 fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
     const WANTED: &[(&str, &str)] = &[
-        ("ear", "q"),
-        ("ear", "tilt"),
-        ("ear", "follow"),
         ("drone", "tune"),
-        ("dronef", "cutoff"),
         ("droneamp", "gain"),
-        ("trace", "natural_decay"),
-        ("fade", "volts"),
-        ("band", "cutoff"),
-        ("band", "q"),
-        ("miclim", "threshold"),
-        ("miclim", "ratio"),
-        ("ava", "bias"),
-        ("avb", "bias"),
-        ("pharynx", "bias"),
+        ("dronef", "cutoff"),
+        ("osc", "tune"),
+        ("call", "cutoff"),
+        ("throat", "cutoff"),
+        ("sky", "bias"),
+        ("body", "cutoff"),
+        ("verb", "mix"),
+        ("verb", "decay"),
         ("pharynx", "rate"),
         ("hymn", "decay"),
-        ("throat", "cutoff"),
-        ("call", "cutoff"),
-        ("body", "cutoff"),
-        ("fbank", "sub"),
-        ("fbank", "lowmid"),
-        ("fbank", "mid"),
-        ("fbank", "air"),
+        ("ear", "tilt"),
+        ("trace", "natural_decay"),
         ("fbank", "tilt"),
         ("fbank", "mix"),
-        ("verb", "time"),
-        ("verb", "decay"),
-        ("verb", "mix"),
+        ("band", "cutoff"),
         ("outcomp", "threshold"),
-        ("outcomp", "ratio"),
-        ("outcomp", "attack"),
-        ("outcomp", "release"),
     ];
     WANTED
         .iter()
@@ -1055,27 +1040,26 @@ function render(state) {
 }
 
 const DESK_LABEL = {
-  ear: 'ear', drone: 'drone', dronef: 'drone', droneamp: 'drone',
-  trace: 'trace', fade: 'trace',
-  split: 'mic split', band: 'output band', miclim: 'limiter',
-  ava: 'retreat', avb: 'advance', pharynx: 'pharynx', hymn: 'hymn',
-  throat: 'throat', call: 'call', body: 'body',
-  fbank: 'filter bank', verb: 'room', outcomp: 'compressor'
+  drone: 'bed', dronef: 'bed', droneamp: 'bed',
+  osc: 'tone', call: 'call', throat: 'throat',
+  sky: 'sky', body: 'body',
+  verb: 'room', pharynx: 'pharynx', hymn: 'hymn',
+  ear: 'ear', trace: 'trace', fade: 'trace',
+  fbank: 'bank', band: 'band', outcomp: 'comp',
+  split: 'mic split', miclim: 'limiter',
+  ava: 'retreat', avb: 'advance'
 };
 const DESK_FALLBACK = [
-  ['ear', 'q'], ['ear', 'tilt'], ['ear', 'follow'],
-  ['drone', 'tune'], ['dronef', 'cutoff'], ['droneamp', 'gain'],
-  ['trace', 'natural_decay'], ['fade', 'volts'],
-  ['band', 'cutoff'], ['band', 'q'],
-  ['miclim', 'threshold'], ['miclim', 'ratio'],
-  ['ava', 'bias'], ['avb', 'bias'],
-  ['pharynx', 'bias'], ['pharynx', 'rate'], ['hymn', 'decay'],
-  ['throat', 'cutoff'], ['call', 'cutoff'], ['body', 'cutoff'],
-  ['fbank', 'sub'], ['fbank', 'lowmid'], ['fbank', 'mid'],
-  ['fbank', 'air'], ['fbank', 'tilt'], ['fbank', 'mix'],
-  ['verb', 'time'], ['verb', 'decay'], ['verb', 'mix'],
-  ['outcomp', 'threshold'], ['outcomp', 'ratio'],
-  ['outcomp', 'attack'], ['outcomp', 'release']
+  ['drone', 'tune'], ['droneamp', 'gain'], ['dronef', 'cutoff'],
+  ['osc', 'tune'], ['call', 'cutoff'], ['throat', 'cutoff'],
+  ['sky', 'bias'], ['body', 'cutoff'],
+  ['verb', 'mix'], ['verb', 'decay'],
+  ['pharynx', 'rate'], ['hymn', 'decay'],
+  ['ear', 'tilt'],
+  ['trace', 'natural_decay'],
+  ['fbank', 'tilt'], ['fbank', 'mix'],
+  ['band', 'cutoff'],
+  ['outcomp', 'threshold']
 ];
 
 function deskItems(state) {
@@ -1100,26 +1084,31 @@ function renderDesk(state) {
   host.innerHTML = '';
   const groups = [];
   items.forEach(item => {
-    let g = groups.find(x => x.name === item.module);
+    const mod = state.modules.find(m => m.name === item.module);
+    if (!mod) return;
+    const label = DESK_LABEL[item.module] || item.module;
+    let g = groups.find(x => x.label === label);
     if (!g) {
-      const mod = state.modules.find(m => m.name === item.module);
-      if (!mod) return;
-      g = { name: item.module, mod, knobs: [] };
+      g = { label, knobs: [] };
       groups.push(g);
     }
-    const knob = g.mod.knobs.find(k => k.name === item.knob);
-    if (knob && !g.knobs.some(k => k.name === knob.name)) g.knobs.push(knob);
+    const knob = mod.knobs.find(k => k.name === item.knob);
+    const key = item.module + '.' + item.knob;
+    if (knob && !g.knobs.some(k => k.key === key)) {
+      g.knobs.push({ spec: knob, module: item.module, key });
+    }
   });
   groups.forEach(g => {
     const row = document.createElement('div');
     row.className = 'deskrow' + (g.knobs.length >= 5 ? ' wide' : '');
-    row.id = 'desk-' + g.name;
+    row.id = 'desk-' + g.label;
     const who = document.createElement('div');
     who.className = 'who';
-    who.textContent = DESK_LABEL[g.name] || g.name;
+    who.textContent = g.label;
     row.appendChild(who);
-    g.knobs.forEach(k => {
-      const id = g.name + '.' + k.name;
+    g.knobs.forEach(entry => {
+      const k = entry.spec;
+      const id = entry.module + '.' + k.name;
       const cell = document.createElement('div');
       cell.className = 'cell';
       const lab = document.createElement('label');
@@ -1140,7 +1129,7 @@ function renderDesk(state) {
       const send = () => {
         const raw = fromNorm(k, Number(input.value));
         val.textContent = fmt(k, raw);
-        post('/api/set', { module: g.name, knob: k.name, value: raw });
+        post('/api/set', { module: entry.module, knob: k.name, value: raw });
       };
       input.addEventListener('pointerdown', () => dragging.add(id));
       input.addEventListener('pointerup', () => dragging.delete(id));
@@ -1560,21 +1549,17 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
         assert!(s.map.cables.iter().any(|c| c.feedback));
-        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
+        assert_eq!(s.desk[0], ("drone".into(), "tune".into()));
+        assert_eq!(s.desk[1], ("droneamp".into(), "gain".into()));
+        assert_eq!(s.desk[2], ("dronef".into(), "cutoff".into()));
+        assert!(s.desk.iter().any(|(m, k)| m == "osc" && k == "tune"));
+        assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
-        assert!(s.desk.iter().any(|(m, k)| m == "drone" && k == "tune"));
-        assert!(s.desk.iter().any(|(m, k)| m == "droneamp" && k == "gain"));
         assert!(s
             .desk
             .iter()
             .any(|(m, k)| m == "trace" && k == "natural_decay"));
-        assert!(s.desk.iter().any(|(m, k)| m == "fade" && k == "volts"));
-        assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
-        assert!(s
-            .desk
-            .iter()
-            .any(|(m, k)| m == "miclim" && k == "threshold"));
-        assert!(s.desk.iter().any(|(m, k)| m == "ava" && k == "bias"));
+        assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "pharynx" && k == "rate"));
         assert!(s.desk.iter().any(|(m, k)| m == "hymn" && k == "decay"));
         assert!(s.desk.iter().any(|(m, k)| m == "throat" && k == "cutoff"));
@@ -1582,10 +1567,11 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "body" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
-        assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
+        assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "threshold"));
+        assert!(!s.desk.iter().any(|(m, _)| m == "miclim" || m == "ava"));
         let json = s.to_json("");
         assert!(json.contains("\"desk\":["));
-        assert!(json.contains("\"module\":\"ear\""));
+        assert!(json.contains("\"module\":\"drone\""));
     }
 
     #[test]
@@ -1599,25 +1585,21 @@ mod tests {
         let built = patch::parse(&text).unwrap().build().unwrap();
         assert!(built.desk.is_empty());
         let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
-        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "q"));
-        assert!(s.desk.iter().any(|(m, k)| m == "drone" && k == "tune"));
+        assert_eq!(s.desk[0], ("drone".into(), "tune".into()));
+        assert!(s.desk.iter().any(|(m, k)| m == "osc" && k == "tune"));
+        assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s
             .desk
             .iter()
             .any(|(m, k)| m == "trace" && k == "natural_decay"));
-        assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "q"));
-        assert!(s
-            .desk
-            .iter()
-            .any(|(m, k)| m == "miclim" && k == "threshold"));
-        assert!(s.desk.iter().any(|(m, k)| m == "ava" && k == "bias"));
+        assert!(s.desk.iter().any(|(m, k)| m == "band" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "pharynx" && k == "rate"));
         assert!(s.desk.iter().any(|(m, k)| m == "throat" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "call" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "body" && k == "cutoff"));
         assert!(s.desk.iter().any(|(m, k)| m == "fbank" && k == "tilt"));
         assert!(s.desk.iter().any(|(m, k)| m == "verb" && k == "mix"));
-        assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "ratio"));
+        assert!(s.desk.iter().any(|(m, k)| m == "outcomp" && k == "threshold"));
     }
 
     #[test]
@@ -1629,13 +1611,13 @@ mod tests {
         let base = url(panel.addr);
         let page = get(&format!("{base}/"));
         assert!(page.contains("id=\"deskwrap\""), "{page}");
-        assert!(page.contains("ear"), "{page}");
-        assert!(page.contains("filter bank"), "{page}");
-        assert!(page.contains("retreat"), "{page}");
+        assert!(page.contains("bed"), "{page}");
+        assert!(page.contains("tone"), "{page}");
         assert!(page.contains("throat"), "{page}");
         let state = get(&format!("{base}/api/state"));
-        assert!(state.contains("\"module\":\"ear\""), "{state}");
         assert!(state.contains("\"module\":\"drone\""), "{state}");
+        assert!(state.contains("\"module\":\"osc\""), "{state}");
+        assert!(state.contains("\"module\":\"sky\""), "{state}");
         assert!(state.contains("\"module\":\"trace\""), "{state}");
         assert!(state.contains("\"module\":\"throat\""), "{state}");
         assert!(state.contains("\"module\":\"call\""), "{state}");
@@ -1645,7 +1627,7 @@ mod tests {
         assert!(state.contains("\"module\":\"outcomp\""), "{state}");
         let response = post(
             &format!("{base}/api/set"),
-            r#"{"module":"ear","knob":"q","value":2}"#,
+            r#"{"module":"drone","knob":"tune","value":55}"#,
         );
         assert!(response.contains("\"ok\":true"), "{response}");
         panel.stop.store(true, Ordering::Relaxed);

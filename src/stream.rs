@@ -929,13 +929,13 @@ mod tests {
         let labels: Vec<_> = (0..built.network.len())
             .map(|i| built.network.label(ModuleId(i)).to_string())
             .collect();
-        assert!(labels.iter().any(|n| n == "drone[0]"), "{labels:?}");
-        assert!(labels.iter().any(|n| n == "drone[1]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "drone"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "fifth"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "dronef"), "{labels:?}");
         let mut stream = Stream::new(built);
         let names = [
-            "drone[0].freq",
-            "drone[1].freq",
+            "drone.freq",
+            "fifth.freq",
             "dronef.cutoff",
             "droneamp.gain",
         ]
