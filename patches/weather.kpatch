@@ -234,8 +234,8 @@ module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
 module osc      vco       tune=220 fm_depth=7 pwm_depth=0.04 level=2.4
 module drone    vco       tune=55 fm_depth=0.4 pwm_depth=0.03 level=1.7
 module fifth    vco       tune=82.41 fm_depth=0.4 pwm_depth=0.03 level=1.55
-module dronef   vcf       cutoff=96 resonance=0.28 cv_depth=1.8 res_depth=0.04 drive=1.05 level=1.0
-module droneamp vca       response=linear gain=0.13 cv_depth=0.14 level=1.0
+module dronef   vcf       cutoff=82 resonance=0.28 cv_depth=1.8 res_depth=0.04 drive=1.05 level=1.0
+module droneamp vca       response=linear gain=0.10 cv_depth=0.14 level=1.0
 module roll     mix       a0=0.07 a1=0.055 a2=0.03 a3=0.02
 module throat   vcf       cutoff=165 resonance=0.72 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.12
 module throatcv mix       a0=0.38 a1=0.20 a2=0.16 a3=-0.08
