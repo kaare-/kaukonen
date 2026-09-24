@@ -1100,7 +1100,7 @@ function renderDesk(state) {
   });
   groups.forEach(g => {
     const row = document.createElement('div');
-    row.className = 'deskrow' + (g.knobs.length >= 5 ? ' wide' : '');
+    row.className = 'deskrow' + (g.knobs.length >= 3 ? ' wide' : '');
     row.id = 'desk-' + g.label;
     const who = document.createElement('div');
     who.className = 'who';
