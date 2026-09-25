@@ -56,10 +56,10 @@
 # a little, so they stay in key. The plucked tone sits on A3. Droughts
 # are that bed, not digital silence.
 #
-# A vocoder sits on the mouths. The call and the throat are the
-# modulator; the bed saws are the carrier. An autotuned saw snaps
-# that pitch onto a minor pentatonic from A1 so a squall sings in
-# the same key as the bed, not wherever the filter happened to be.
+# A vocoder sits on the gated pluck. Toneamp is the modulator so
+# the door can shut; the bed saws are the carrier. An autotuned
+# saw snaps that pitch onto a minor pentatonic from A1 so a squall
+# sings in the same key as the bed, not wherever the filter was.
 #
 # After that window, an eight-band fixed filter bank (ADDAC 601 centres)
 # colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
@@ -698,10 +698,11 @@ patch sand.a        -> drone.pwm
 patch sand.b        -> fifth.pwm
 patch dronef.out    -> droneamp.in
 patch droneamp.out  -> end[*].in2
-# The mouths teach a vocoder; the bed saws are the carrier. Tune
-# snaps the sung pitch onto the A minor pentatonic.
-patch call.out      -> voice.mod
-patch throat.out    -> voice.mod
+# The gated pluck teaches a vocoder; the bed saws are the carrier.
+# Tune snaps the sung pitch onto the A minor pentatonic. The call
+# itself is always running — toneamp is the door, so droughts stay
+# a bed, not a held syllable.
+patch toneamp.out   -> voice.mod
 patch drone.saw     -> voice.carrier
 patch fifth.saw     -> voice.carrier
 patch after.out     -> voice.shift_cv
