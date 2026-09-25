@@ -280,8 +280,10 @@ impl AnalogModule for Vocode {
             wet += c * e;
         }
         self.env = env_sum / 8.0;
-        // Eight bands would otherwise sit up too loud against a dry mouth.
-        wet *= 0.55;
+        // The door is the mean envelope, squared. A vocoder that keeps
+        // leaking its saw through silence is a test tone, not a mouth.
+        let gate = (self.env / 0.06).clamp(0.0, 1.0);
+        wet *= 0.55 * gate * gate;
 
         let mixed = (1.0 - mix) * modulator + mix * wet;
         let out = clamp_rail(level * mixed, DEFAULT_RAIL);
@@ -405,6 +407,22 @@ mod tests {
             v.step(&[0.0, 0.0, 0.0, 0.0], DT);
         }
         assert!(v.lock < 0.2, "lock hung after silence: {}", v.lock);
+    }
+
+    #[test]
+    fn silence_closes_the_mouth() {
+        let mut v = Vocode::new();
+        v.set_param("mix", 1.0).unwrap();
+        v.set_param("tune", 1.0).unwrap();
+        drive(&mut v, 220.0, 1.6, 0.2, 0.0);
+        for _ in 0..(0.25 / DT) as usize {
+            v.step(&[0.0, 0.0, 0.0, 0.0], DT);
+        }
+        let mut peak = 0.0f32;
+        for _ in 0..(0.05 / DT) as usize {
+            peak = peak.max(v.step(&[0.0, 0.0, 0.0, 0.0], DT)[0].abs());
+        }
+        assert!(peak < 0.02, "the saw leaked through silence: {peak}");
     }
 
     #[test]

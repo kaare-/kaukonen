@@ -263,7 +263,7 @@ module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
 module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
 module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
 module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
-module end      mix[2]    a0=0.44 a1=0.66 a2=0.20 a3=0.16 level=0.95
+module end      mix[2]    a0=0.44 a1=0.66 a2=0.20 a3=0.12 level=0.95
 module fbank    fbank[2]  sub=1.32 bass=1.24 low=1.05 lowmid=0.76 mid=0.68 highmid=0.70 high=0.80 air=0.58 q=1.8 tilt=-0.14 tilt_depth=0.2 q_depth=0.08 mix=0.5 level=1.15
 module verb     verb[2]   time=0.08 decay=0.52 damp=0.38 size=0.8 mix=0.28 time_depth=0.01 decay_depth=0.08 level=1.0
 module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.12 mix=1
