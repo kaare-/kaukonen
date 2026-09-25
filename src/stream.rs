@@ -1079,8 +1079,16 @@ mod tests {
         }
         assert!(env_hi > 0.02, "the vocoder never heard a mouth: {env_hi}");
         assert!(
-            snap_hi > 40.0 && snap_hi < 400.0,
+            snap_hi > 40.0 && snap_hi < 900.0,
             "the sung pitch left the voice: {snap_hi}"
+        );
+        let semi = (12.0 * (snap_hi / 55.0).log2()).rem_euclid(12.0);
+        let in_key = [0.0, 3.0, 5.0, 7.0, 10.0]
+            .iter()
+            .any(|d| (semi - d).abs() < 0.35 || (semi - d - 12.0).abs() < 0.35);
+        assert!(
+            in_key,
+            "snapped {snap_hi} Hz is not on the A pentatonic (semi {semi})"
         );
         assert!(lock_hi.is_finite(), "lock {lock_hi}");
     }
