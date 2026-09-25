@@ -17,6 +17,7 @@ pub mod vca;
 pub mod vcf;
 pub mod vco;
 pub mod verb;
+pub mod vocode;
 
 pub use cochlea::Cochlea;
 pub use comp::Comp;
@@ -29,6 +30,7 @@ pub use vca::Vca;
 pub use vcf::Vcf;
 pub use vco::Vco;
 pub use verb::Verb;
+pub use vocode::Vocode;
 
 /// Correction that removes most of the aliasing from a waveform's jump.
 ///

@@ -1048,6 +1048,44 @@ mod tests {
     }
 
     #[test]
+    fn weather_voice_sings_in_the_key() {
+        // The vocoder has to be on the rack, and a squall has to light
+        // it. If snapped never leaves rest the autotune is decoration.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        let kinds: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.get(ModuleId(i)).kind_name())
+            .collect();
+        assert!(labels.iter().any(|n| n == "voice"), "{labels:?}");
+        assert!(kinds.iter().any(|k| *k == "vocode"), "{kinds:?}");
+        let mut stream = Stream::new(built);
+        let names = ["voice.env", "voice.lock", "voice.snapped", "voice.sung"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let mut env_hi = 0.0f32;
+        let mut lock_hi = 0.0f32;
+        let mut snap_hi = 0.0f32;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..6000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            env_hi = env_hi.max(now[0]);
+            lock_hi = lock_hi.max(now[1]);
+            snap_hi = snap_hi.max(now[2]);
+        }
+        assert!(env_hi > 0.02, "the vocoder never heard a mouth: {env_hi}");
+        assert!(
+            snap_hi > 40.0 && snap_hi < 400.0,
+            "the sung pitch left the voice: {snap_hi}"
+        );
+        assert!(lock_hi.is_finite(), "lock {lock_hi}");
+    }
+
+    #[test]
     fn weather_has_a_filterbank_and_a_room() {
         // The last colour is a fixed bank and a short room. If those
         // modules are missing the output is just the old band+comp.

@@ -216,6 +216,31 @@ centroid (0–5 V); `loud` is the mean.
 | `follow` | 0.008..0.8 s | `0.07 s` | base follow at 500 Hz; lower bands are slower |
 | `level` | 0..8 V | `5 V` | envelope scale |
 
+## `vocode`
+
+- inputs: `mod`, `carrier`, `shift_cv`, `root_cv`
+- outputs: `out`, `v_oct`, `env`, `lock`
+- states: `pitch`, `snapped`, `sung`, `lock`, `env`
+
+Eight formant bands (100 / 200 / 350 / 600 / 1k / 1.7k / 3k / 5.5k Hz).
+The modulator's envelopes open the same bands on a carrier — the usual
+analog vocoder. `tune` crossfades in an internal saw whose pitch is
+tracked from the modulator and snapped to a scale. `v_oct` is that
+note relative to `root` (0 V is the root). Silence holds the last note.
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `q` | 0.6..8 | `2.4` | selectivity of each vocoder band |
+| `follow` | 0.004..0.4 s | `0.018 s` | envelope time; faster is more syllables |
+| `shift` | -2..2 | `0` | formant shift in octaves; + is a smaller creature |
+| `shift_depth` | -2..2 | `0.25` | octaves per volt on SHIFT CV |
+| `mix` | 0..1 | `0.78` | dry modulator vs sung carrier |
+| `tune` | 0..1 | `0.62` | 0 is the patched carrier, 1 is the autotuned saw |
+| `scale` | off\|chromatic\|major\|minor\|penta\|fifths | `penta` | how the tracker snaps; penta sits on the weather bed |
+| `root` | 20..2000 Hz | `55 Hz` | scale root; 55 is A1 |
+| `glide` | 0.002..0.8 s | `0.06 s` | how slowly the sung pitch walks |
+| `level` | 0..4 | `1` | output scale |
+
 ## `verb`
 
 - inputs: `in`, `time_cv`, `decay_cv`

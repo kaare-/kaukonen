@@ -7,7 +7,7 @@ use crate::rc1::Rc1;
 use crate::source::Source;
 use crate::tc3::Tc3;
 use crate::types::{clamp_rail, InstanceVariation, Volt};
-use crate::util::{Cochlea, Comp, Env, Fbank, Mix, Noise, Svf, Vca, Vcf, Vco, Verb};
+use crate::util::{Cochlea, Comp, Env, Fbank, Mix, Noise, Svf, Vca, Vcf, Vco, Verb, Vocode};
 
 /// Maximum jacks on any one module (TC-3 has 5 inputs / 4 outputs).
 pub const MAX_PORTS: usize = 8;
@@ -158,6 +158,7 @@ pub enum Module {
     Fbank(Fbank),
     Verb(Verb),
     Cochlea(Cochlea),
+    Vocode(Vocode),
     Vca(Vca),
     Mix(Mix),
     Env(Env),
@@ -181,6 +182,7 @@ macro_rules! dispatch {
             Module::Fbank($inner) => $body,
             Module::Verb($inner) => $body,
             Module::Cochlea($inner) => $body,
+            Module::Vocode($inner) => $body,
             Module::Vca($inner) => $body,
             Module::Mix($inner) => $body,
             Module::Env($inner) => $body,
@@ -208,6 +210,7 @@ impl Module {
         ("fbank", || Module::Fbank(Fbank::new())),
         ("verb", || Module::Verb(Verb::new())),
         ("cochlea", || Module::Cochlea(Cochlea::new())),
+        ("vocode", || Module::Vocode(Vocode::new())),
         ("vca", || Module::Vca(Vca::new())),
         ("mix", || Module::Mix(Mix::new())),
         ("env", || Module::Env(Env::new())),
@@ -367,6 +370,12 @@ impl From<Verb> for Module {
 impl From<Cochlea> for Module {
     fn from(m: Cochlea) -> Self {
         Self::Cochlea(m)
+    }
+}
+
+impl From<Vocode> for Module {
+    fn from(m: Vocode) -> Self {
+        Self::Vocode(m)
     }
 }
 

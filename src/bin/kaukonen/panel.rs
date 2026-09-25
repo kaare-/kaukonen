@@ -159,6 +159,9 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("droneamp", "gain"),
         ("dronef", "cutoff"),
         ("osc", "tune"),
+        ("voice", "tune"),
+        ("voice", "mix"),
+        ("voice", "scale"),
         ("call", "cutoff"),
         ("throat", "cutoff"),
         ("sky", "bias"),
@@ -1041,7 +1044,7 @@ function render(state) {
 
 const DESK_LABEL = {
   drone: 'bed', dronef: 'bed', droneamp: 'bed',
-  osc: 'tone', call: 'call', throat: 'throat',
+  osc: 'tone', voice: 'voice', call: 'call', throat: 'throat',
   sky: 'sky', body: 'body',
   verb: 'room', pharynx: 'pharynx', hymn: 'hymn',
   ear: 'ear', trace: 'trace', fade: 'trace',
@@ -1051,7 +1054,8 @@ const DESK_LABEL = {
 };
 const DESK_FALLBACK = [
   ['drone', 'tune'], ['droneamp', 'gain'], ['dronef', 'cutoff'],
-  ['osc', 'tune'], ['call', 'cutoff'], ['throat', 'cutoff'],
+  ['osc', 'tune'], ['voice', 'tune'], ['voice', 'mix'], ['voice', 'scale'],
+  ['call', 'cutoff'], ['throat', 'cutoff'],
   ['sky', 'bias'], ['body', 'cutoff'],
   ['verb', 'mix'], ['verb', 'decay'],
   ['pharynx', 'rate'], ['hymn', 'decay'],
@@ -1228,7 +1232,7 @@ function sendInput(extra) {
 const KIND_FILL = {
   audioin: '#14332a', audioout: '#1a2838', rc1: '#3b2f14', tc3: '#2a1f38',
   neuron: '#331e2a', vcf: '#1a2e33', svf: '#1a2e33', fbank: '#1a2e33',
-  cochlea: '#1a2e33',
+  cochlea: '#1a2e33', vocode: '#2a2418',
   verb: '#242018', comp: '#1a2420', vca: '#1a2a22', vco: '#2a2418',
   mix: '#1b2028', env: '#2a2218', noise: '#222', source: '#1f2430'
 };
@@ -1545,6 +1549,7 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "ear"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "tide"));
         assert!(s.map.nodes.iter().any(|n| n.name == "trace"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "voice"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "replay"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
         assert!(s.map.nodes.iter().any(|n| n.name == "a"));
@@ -1553,6 +1558,9 @@ mod tests {
         assert_eq!(s.desk[1], ("droneamp".into(), "gain".into()));
         assert_eq!(s.desk[2], ("dronef".into(), "cutoff".into()));
         assert!(s.desk.iter().any(|(m, k)| m == "osc" && k == "tune"));
+        assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "tune"));
+        assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "mix"));
+        assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "scale"));
         assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
         assert!(s
@@ -1587,6 +1595,7 @@ mod tests {
         let s = Surface::from_built("patches/weather.kpatch", "test", 0.4, &built);
         assert_eq!(s.desk[0], ("drone".into(), "tune".into()));
         assert!(s.desk.iter().any(|(m, k)| m == "osc" && k == "tune"));
+        assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "tune"));
         assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s
             .desk
@@ -1617,6 +1626,7 @@ mod tests {
         let state = get(&format!("{base}/api/state"));
         assert!(state.contains("\"module\":\"drone\""), "{state}");
         assert!(state.contains("\"module\":\"osc\""), "{state}");
+        assert!(state.contains("\"module\":\"voice\""), "{state}");
         assert!(state.contains("\"module\":\"sky\""), "{state}");
         assert!(state.contains("\"module\":\"trace\""), "{state}");
         assert!(state.contains("\"module\":\"throat\""), "{state}");

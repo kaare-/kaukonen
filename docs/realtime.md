@@ -75,15 +75,17 @@ two-cell tide wanders on a minute scale so a half-hour pass keeps
 walking. A slow BCM connectome watches the rain, the pharynx and
 the pair and writes a little of who the rack was back into the
 climate. Two low sines a fifth apart (A1 and E2) sit under the mix as
-a slowly rolling bed; the plucked tone sits on A3. CV ladders sit on
+a slowly rolling bed; the plucked tone sits on A3. A vocoder puts the
+call and the throat onto those bed saws and snaps the sung pitch to
+an A minor pentatonic. CV ladders sit on
 the pharynx (throat), the plucked tone (call) and the stereo mix (body)
 so a squall is a chest, not a beep.
 A limiter and a six-hair cochlea place-code the microphone into
 rumble, chest, formant, speech, hiss and air that steer different
 nerves. A wide CV bandpass, an eight-band fixed filter bank,
 a small room and a tunable compressor sit on the mix at the end. The
-live page desk leads with the bed, the tone, the mouths, the sky and
-the room. Memory, the ear and the compressor sit after those.
+live page desk leads with the bed, the tone, the voice, the mouths, the
+sky and the room. Memory, the ear and the compressor sit after those.
 Capture stirs the sky rather
 than sitting on the speakers. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
@@ -200,8 +202,8 @@ refused rather than doing something surprising mid-performance. Enum knobs take
 their names: `set amp.response exponential`.
 
 A `desk` line in the patch pins those knobs at the top of the page, so a
-rack as large as weather still has the bed, the tone, the mouths, the
-sky and the room in reach.
+rack as large as weather still has the bed, the tone, the voice, the
+mouths, the sky and the room in reach.
 
 `--set module.knob=value` does the same thing at launch, repeatably, which is
 how to try a variation without editing the patch.
