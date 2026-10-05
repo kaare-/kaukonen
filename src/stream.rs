@@ -1110,42 +1110,42 @@ mod tests {
         assert!(labels.iter().any(|n| n == "key[2]"), "{labels:?}");
         assert!(kinds.iter().any(|k| *k == "quant"), "{kinds:?}");
         let mut stream = Stream::new(built);
-        let names = ["drone.freq", "fifth.freq", "osc.freq", "key[0].hz", "key[2].hz"]
+        let names = ["key[0].snapped", "key[1].snapped", "key[2].snapped"]
             .into_iter()
             .map(String::from)
             .collect::<Vec<_>>();
         let phrygian = [0.0, 1.0, 3.0, 5.0, 7.0, 8.0, 10.0];
         let in_key = |hz: f32| {
-            if hz < 30.0 {
+            if hz < 20.5 {
                 return true;
             }
             let semi = (12.0 * (hz / 55.0).log2()).rem_euclid(12.0);
             phrygian
                 .iter()
-                .any(|d| (semi - d).abs() < 0.45 || (semi - d - 12.0).abs() < 0.45)
+                .any(|d| (semi - d).abs() < 0.35 || (semi - d - 12.0).abs() < 0.35)
         };
         let mut off = 0usize;
         let mut samples = 0usize;
-        let mut drone_hi = 0.0f32;
-        let mut drone_lo = f32::MAX;
+        let mut bed_hi = 0.0f32;
+        let mut bed_lo = f32::MAX;
         let mut buffer = vec![0.0f32; 64 * 2];
         for _ in 0..5000 {
             stream.process(&mut buffer, 2);
             let now = stream.engine_mut().snapshot_sample(&names);
             samples += 1;
-            drone_lo = drone_lo.min(now[0]);
-            drone_hi = drone_hi.max(now[0]);
-            if !in_key(now[0]) || !in_key(now[1]) || !in_key(now[3]) {
+            bed_lo = bed_lo.min(now[0]);
+            bed_hi = bed_hi.max(now[0]);
+            if !in_key(now[0]) || !in_key(now[1]) || !in_key(now[2]) {
                 off += 1;
             }
         }
         assert!(
-            off * 20 < samples,
-            "pitch left A Phrygian in {off}/{samples} windows; drone {drone_lo}..{drone_hi}"
+            off * 50 < samples,
+            "quantizers left A Phrygian in {off}/{samples} windows; bed {bed_lo}..{bed_hi}"
         );
         assert!(
-            drone_hi > 1.03 * drone_lo,
-            "the bed never changed degree: {drone_lo} .. {drone_hi}"
+            bed_hi > 1.03 * bed_lo,
+            "the bed never changed degree: {bed_lo} .. {bed_hi}"
         );
     }
 
