@@ -1083,14 +1083,70 @@ mod tests {
             "the sung pitch left the voice: {snap_hi}"
         );
         let semi = (12.0 * (snap_hi / 55.0).log2()).rem_euclid(12.0);
-        let in_key = [0.0, 3.0, 5.0, 7.0, 10.0]
+        let in_key = [0.0, 1.0, 3.0, 5.0, 7.0, 8.0, 10.0]
             .iter()
             .any(|d| (semi - d).abs() < 0.35 || (semi - d - 12.0).abs() < 0.35);
         assert!(
             in_key,
-            "snapped {snap_hi} Hz is not on the A pentatonic (semi {semi})"
+            "snapped {snap_hi} Hz is not on A Phrygian (semi {semi})"
         );
         assert!(lock_hi.is_finite(), "lock {lock_hi}");
+    }
+
+    #[test]
+    fn weather_holds_a_phrygian_key() {
+        // The bed, the fifth and the pluck have to sit on A Phrygian.
+        // If any of them wander chromatically the quantizers are decoration.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        let kinds: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.get(ModuleId(i)).kind_name())
+            .collect();
+        assert!(labels.iter().any(|n| n == "key[0]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "key[1]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "key[2]"), "{labels:?}");
+        assert!(kinds.iter().any(|k| *k == "quant"), "{kinds:?}");
+        let mut stream = Stream::new(built);
+        let names = ["drone.freq", "fifth.freq", "osc.freq", "key[0].hz", "key[2].hz"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let phrygian = [0.0, 1.0, 3.0, 5.0, 7.0, 8.0, 10.0];
+        let in_key = |hz: f32| {
+            if hz < 30.0 {
+                return true;
+            }
+            let semi = (12.0 * (hz / 55.0).log2()).rem_euclid(12.0);
+            phrygian
+                .iter()
+                .any(|d| (semi - d).abs() < 0.45 || (semi - d - 12.0).abs() < 0.45)
+        };
+        let mut off = 0usize;
+        let mut samples = 0usize;
+        let mut drone_hi = 0.0f32;
+        let mut drone_lo = f32::MAX;
+        let mut buffer = vec![0.0f32; 64 * 2];
+        for _ in 0..5000 {
+            stream.process(&mut buffer, 2);
+            let now = stream.engine_mut().snapshot_sample(&names);
+            samples += 1;
+            drone_lo = drone_lo.min(now[0]);
+            drone_hi = drone_hi.max(now[0]);
+            if !in_key(now[0]) || !in_key(now[1]) || !in_key(now[3]) {
+                off += 1;
+            }
+        }
+        assert!(
+            off * 20 < samples,
+            "pitch left A Phrygian in {off}/{samples} windows; drone {drone_lo}..{drone_hi}"
+        );
+        assert!(
+            drone_hi > 1.03 * drone_lo,
+            "the bed never changed degree: {drone_lo} .. {drone_hi}"
+        );
     }
 
     #[test]

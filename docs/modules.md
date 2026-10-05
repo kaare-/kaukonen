@@ -236,10 +236,28 @@ note relative to `root` (0 V is the root). Silence holds the last note.
 | `shift_depth` | -2..2 | `0.25` | octaves per volt on SHIFT CV |
 | `mix` | 0..1 | `0.78` | dry modulator vs sung carrier |
 | `tune` | 0..1 | `0.62` | 0 is the patched carrier, 1 is the autotuned saw |
-| `scale` | off\|chromatic\|major\|minor\|penta\|fifths | `penta` | how the tracker snaps; penta sits on the weather bed |
+| `scale` | off\|chromatic\|major\|minor\|penta\|fifths\|phrygian | `phrygian` | how the tracker snaps; phrygian is the flat 2 |
 | `root` | 20..2000 Hz | `55 Hz` | scale root; 55 is A1 |
 | `glide` | 0.002..0.8 s | `0.06 s` | how slowly the sung pitch walks |
 | `level` | 0..4 | `1` | output scale |
+
+## `quant`
+
+- inputs: `v_oct`, `root_cv`
+- outputs: `v_oct`, `hz`
+- states: `hz`, `snapped`, `v_oct`
+
+A 1 V/oct door. Incoming volts are applied to `tune`, snapped onto
+`root`'s scale, and written back out so an oscillator stays in key.
+`amount` of 0 is the raw jack. Phrygian from A is A Bb C D E F G.
+
+| knob | range | default | doc |
+| --- | --- | --- | --- |
+| `tune` | 20..4000 Hz | `55 Hz` | the oscillator this jack feeds; 0 V is this pitch |
+| `root` | 20..2000 Hz | `55 Hz` | scale root; 55 is A1 |
+| `scale` | off\|chromatic\|major\|minor\|penta\|fifths\|phrygian | `phrygian` | how the pitch snaps; phrygian is the flat 2 |
+| `amount` | 0..1 | `1` | 0 is the raw CV, 1 is the scale |
+| `glide` | 0.001..0.8 s | `0.08 s` | how slowly a new degree is reached |
 
 ## `verb`
 

@@ -1,5 +1,6 @@
 //! Analog vocoder with a scale-locked carrier. A utility, not a neural module.
 
+use super::scale::{self, SCALES};
 use super::{poly_blep, volts_to_ratio};
 use crate::module::{AnalogModule, ModuleOutputs};
 use crate::param::{knob_accessors, params, ParamSpec, Unit};
@@ -7,18 +8,6 @@ use crate::types::{clamp_rail, Volt, DEFAULT_RAIL};
 
 /// Formant-ish centres, a little tighter than the ADDAC bank.
 const CENTRES: [f32; 8] = [100.0, 200.0, 350.0, 600.0, 1_000.0, 1_700.0, 3_000.0, 5_500.0];
-
-/// How the detected pitch is snapped.
-pub const SCALES: &[&str] = &["off", "chromatic", "major", "minor", "penta", "fifths"];
-
-const DEGREES: [&[i32]; 6] = [
-    &[],
-    &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-    &[0, 2, 4, 5, 7, 9, 11],
-    &[0, 2, 3, 5, 7, 8, 10],
-    &[0, 3, 5, 7, 10],
-    &[0, 7],
-];
 
 const IN_JACKS: &[&str] = &["mod", "carrier", "shift_cv", "root_cv"];
 const OUT_JACKS: &[&str] = &["out", "v_oct", "env", "lock"];
@@ -31,7 +20,7 @@ const PARAMS: &[ParamSpec] = params! {
     "shift_depth", Unit::Ratio, -2.0 ..= 2.0, 0.25, Linear, "octaves per volt on SHIFT CV";
     "mix", Unit::Ratio, 0.0 ..= 1.0, 0.78, Linear, "dry modulator vs sung carrier";
     "tune", Unit::Ratio, 0.0 ..= 1.0, 0.62, Linear, "0 is the patched carrier, 1 is the autotuned saw";
-    "scale", Unit::Enum(SCALES), 0.0 ..= 5.0, 4.0, Linear, "how the tracker snaps; penta sits on the weather bed";
+    "scale", Unit::Enum(SCALES), 0.0 ..= 6.0, 6.0, Linear, "how the tracker snaps; phrygian is the flat 2";
     "root", Unit::Hertz, 20.0 ..= 2000.0, 55.0, Log, "scale root; 55 is A1";
     "glide", Unit::Seconds, 0.002 ..= 0.8, 0.06, Log, "how slowly the sung pitch walks";
     "level", Unit::Ratio, 0.0 ..= 4.0, 1.0, Linear, "output scale";
@@ -93,7 +82,7 @@ impl Vocode {
             shift_depth: 0.25,
             mix: 0.78,
             tune: 0.62,
-            scale: 4,
+            scale: 6,
             root: 55.0,
             glide: 0.06,
             level: 1.0,
@@ -127,31 +116,6 @@ impl Vocode {
         cell.s1 = 2.0 * bp - cell.s1;
         cell.s2 = 2.0 * lp - cell.s2;
         bp
-    }
-
-    fn quantize(hz: f32, root: f32, scale: usize) -> f32 {
-        if !(hz.is_finite() && hz > 1.0) || !(root.is_finite() && root > 1.0) {
-            return root.max(1.0);
-        }
-        if scale == 0 || scale >= DEGREES.len() || DEGREES[scale].is_empty() {
-            return hz;
-        }
-        let n = 12.0 * (hz / root).log2();
-        let octave = n.div_euclid(12.0);
-        let semi = n - octave * 12.0;
-        let mut best = 0.0f32;
-        let mut best_d = 100.0f32;
-        for wrap in [-1, 0, 1] {
-            for &degree in DEGREES[scale] {
-                let cand = degree as f32 + 12.0 * wrap as f32;
-                let d = (semi - cand).abs();
-                if d < best_d {
-                    best_d = d;
-                    best = cand;
-                }
-            }
-        }
-        (root * ((octave * 12.0 + best) / 12.0).exp2()).clamp(20.0, 4000.0)
     }
 
     /// Pitch actually being sung, after glide.
@@ -237,7 +201,7 @@ impl AnalogModule for Vocode {
                 let hz = 1.0 / period;
                 let track = 0.35;
                 self.pitch += track * (hz - self.pitch);
-                self.snapped = Self::quantize(self.pitch, root, self.scale);
+                self.snapped = scale::snap(self.pitch, root, self.scale);
                 self.lock = (self.lock + 0.08).min(5.0);
             }
         }

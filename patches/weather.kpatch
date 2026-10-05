@@ -58,8 +58,9 @@
 #
 # A vocoder sits on the gated pluck. Toneamp is the modulator so
 # the door can shut; the bed saws are the carrier. An autotuned
-# saw snaps that pitch onto a minor pentatonic from A1 so a squall
-# sings in the same key as the bed, not wherever the filter was.
+# saw snaps that pitch onto A Phrygian so a squall sings in the
+# same key as the bed. Three quantizers hold the bed, the fifth
+# and the pluck on that scale (A Bb C D E F G).
 #
 # After that window, an eight-band fixed filter bank (ADDAC 601 centres)
 # colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
@@ -73,8 +74,8 @@
 # join the tide. Those bands never reach the converter.
 # A tunable compressor sits on the stereo mix after the room.
 # The live page desk leads with the knobs that play: the bed, the
-# plucked tone, the voice, the mouths, the sky, the room. Memory,
-# the ear and the compressor sit after those.
+# plucked tone, the key, the voice, the mouths, the sky, the room.
+# Memory, the ear and the compressor sit after those.
 #
 # Leave it running. The tide and the slow sky are meant for a
 # thirty-minute ambient pass, not a two-minute demonstration.
@@ -133,8 +134,9 @@
 #   set osc.tune 220          # the plucked A3; 165 is E, 110 is a lower A
 #   set voice.tune 0.6        # 0 is a plain vocoder, 1 is all autotune
 #   set voice.mix 0.74        # 0 is the dry mouths, 1 is the sung carrier
-#   set voice.scale penta     # chromatic / major / minor / penta / fifths / off
+#   set voice.scale phrygian  # A Phrygian: A Bb C D E F G
 #   set voice.root 55         # A1; 110 is A2, 220 is the plucked octave
+#   set key.scale phrygian    # the three pitch doors; off is free wander
 #   set trace.natural_decay 0.003  # how long a squall stays in the matrix; 0.02 is a minute
 #   set fade.volts 0.03       # the slow leak; 0 is a scar, 0.15 is sand
 #   set replay.a0 0.14        # how hard the memory writes back into the climate
@@ -159,7 +161,7 @@ seed 23
 mismatch 0.06
 desk drone.tune droneamp.gain dronef.cutoff
 desk osc.tune voice.tune voice.mix
-desk voice.scale call.cutoff throat.cutoff
+desk key.scale voice.scale call.cutoff throat.cutoff
 desk sky.bias body.cutoff
 desk verb.mix verb.decay
 desk pharynx.rate hymn.decay
@@ -246,7 +248,10 @@ module drone    vco       tune=55 fm_depth=0.4 pwm_depth=0.03 level=1.7
 module fifth    vco       tune=82.41 fm_depth=0.4 pwm_depth=0.03 level=1.55
 module dronef   vcf       cutoff=82 resonance=0.28 cv_depth=1.8 res_depth=0.04 drive=1.05 level=1.0
 module droneamp vca       response=linear gain=0.10 cv_depth=0.14 level=1.0
-module voice    vocode    q=2.2 follow=0.016 shift=0.1 shift_depth=0.08 mix=0.74 tune=0.58 scale=penta root=55 glide=0.07 level=0.9
+module voice    vocode    q=2.2 follow=0.016 shift=0.1 shift_depth=0.08 mix=0.74 tune=0.58 scale=phrygian root=55 glide=0.07 level=0.9
+module walk     mix       a0=0.42 a1=0.32 a2=0.20 a3=0.16
+module climb    mix       a0=0.55 a1=0.14 a2=0.10 a3=0.08
+module key      quant[3]  scale=phrygian root=55 amount=1 glide=0.1
 module roll     mix       a0=0.07 a1=0.055 a2=0.03 a3=0.02
 module throat   vcf       cutoff=165 resonance=0.72 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.12
 module throatcv mix       a0=0.38 a1=0.20 a2=0.16 a3=-0.08
@@ -299,6 +304,10 @@ knob pharynx[2].rate 38
 knob pharynx[0].bias 1.42
 knob pharynx[1].bias 1.52
 knob pharynx[2].bias 1.40
+knob key[0].tune 55
+knob key[1].tune 82.41
+knob key[2].tune 220
+knob key[2].glide 0.05
 # The sky is the climate. Its mix is the weather voltage.
 # Any cell can open a squall — if only sky[0] gates it, the doors
 # die once that cell adapts, and a soak has no second burst.
@@ -683,30 +692,42 @@ patch band[0].bp   -> end[0].in1
 patch right.out    -> end[1].in0
 patch band[1].bp   -> end[1].in1
 # A slowly rolling bed under the weather. A1 and E2 hold the key;
-# the tide walks the ladder more than the pitch. The doors do not shut it.
+# the tide walks the ladder. Pitch goes through two Phrygian
+# doors so the sines stay on A Bb C D E F G.
 patch drone.sine    -> dronef.in
 patch fifth.sine    -> dronef.in
 patch tide[0].out   -> roll.in0
 patch tide[1].out   -> roll.in1
 patch season.out    -> roll.in2
 patch after.out     -> roll.in3
-patch roll.out      -> drone.v_oct
-patch roll.out      -> fifth.v_oct
 patch roll.out      -> dronef.cutoff_cv
 patch roll.out      -> droneamp.cv
+patch tide[0].out   -> walk.in0
+patch tide[1].out   -> walk.in1
+patch season.out    -> walk.in2
+patch after.out     -> walk.in3
+patch walk.out      -> key[0].v_oct
+patch walk.out      -> key[1].v_oct
+patch key[0].v_oct  -> drone.v_oct
+patch key[1].v_oct  -> fifth.v_oct
 patch sand.a        -> drone.pwm
 patch sand.b        -> fifth.pwm
 patch dronef.out    -> droneamp.in
 patch droneamp.out  -> end[*].in2
 # The gated pluck teaches a vocoder; the bed saws are the carrier.
-# Tune snaps the sung pitch onto the A minor pentatonic. The call
-# itself is always running — toneamp is the door, so droughts stay
-# a bed, not a held syllable.
+# Tune snaps onto A Phrygian. The call itself is always running —
+# toneamp is the door, so droughts stay a bed, not a held syllable.
 patch toneamp.out   -> voice.mod
 patch drone.saw     -> voice.carrier
 patch fifth.saw     -> voice.carrier
 patch after.out     -> voice.shift_cv
 patch voice.out     -> end[*].in3
+patch voice.v_oct   -> climb.in0
+patch ear.place     -> climb.in1
+patch hymn.out      -> climb.in2
+patch season.out    -> climb.in3
+patch climb.out     -> key[2].v_oct
+patch key[2].v_oct  -> osc.v_oct
 patch end[0].out   -> body[0].in
 patch end[1].out   -> body[1].in
 patch after.out    -> bodycv.in0
@@ -730,4 +751,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env trace.norm trace.activity trace.w00 replay[0].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env key[0].hz key[1].hz key[2].hz key[0].v_oct trace.norm trace.activity trace.w00 replay[0].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
