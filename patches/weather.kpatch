@@ -67,13 +67,14 @@
 # lean in; it snaps onto A Phrygian. Three quantizers hold the bed,
 # the fifth and the pluck on that scale (A Bb C D E F G).
 #
-# A breath follower on the limiter is the phrase clock. While she
-# is up it ducks the rain, the grains and the room (jazz comping:
-# leave space). The same envelope inhibits the pharynx, so the
-# throat is free to answer in the holes. Voice.env opens the call
-# and the throat with her intensity. The pluck's pitch door tracks
-# the sung note around A3, then holds the last degree in a rest.
-# Hair-cell follow is syllable-rate, so diphthongs steer the sky.
+# A breath follower is the syllable clock. A slower linger is the
+# phrase memory. While she is up the rack improvises with her —
+# vocoded vowels on the bed, a little rain still in the room, the
+# throat walking her intensity. When she stops, linger keeps the
+# last note, the throat and a ghost of the pluck alive, and writes
+# that phrase into the trace. Over about nine seconds it forgets
+# and the climate takes the idea over. Hair-cell follow is
+# syllable-rate, so diphthongs steer the sky.
 #
 # After that window, an eight-band fixed filter bank (ADDAC 601 centres)
 # colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
@@ -143,7 +144,8 @@
 #   set ear.follow 0.03       # syllable hairs; 0.08 smears a phrase into weather
 #   set adc.gain 2.0          # how hard speech stirs the sky and the mouth
 #   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
-#   set breath.decay 0.10     # how long a phrase holds the duck; 0.04 is choppy
+#   set breath.decay 0.10     # syllable duck; the linger is the coda
+#   set linger.decay 9        # how long the rack keeps her last idea; 4 is a tag, 16 is a chorus
 #   set drone.tune 55         # A1; the other oscillator is a fifth up. 41 is E, 65 is C
 #   set dronef.cutoff 78      # chest; 40 is a hum, 140 starts to speak
 #   set dronef.cv_depth 0.4   # keep small; 1.8 was the motor revving
@@ -179,7 +181,7 @@ mismatch 0.06
 desk drone.tune droneamp.gain dronef.cutoff
 desk osc.tune voice.tune voice.mix
 desk key.scale voice.scale call.cutoff throat.cutoff
-desk adc.gain ear.follow ear.tilt
+desk adc.gain ear.follow linger.decay ear.tilt
 desk sky.bias body.cutoff
 desk verb.mix verb.decay
 desk pharynx.rate hymn.decay
@@ -270,8 +272,10 @@ module loom     mix       a0=0.04 a1=0.03 a2=0 a3=0
 module voice    vocode    q=2.0 follow=0.011 shift=0.12 shift_depth=0.08 mix=0.96 tune=0.28 scale=phrygian root=220 glide=0.04 level=1.05
 module sing     mix       a0=0.88 a1=0.50 a2=0 a3=0 level=1.0
 module breath   env       mode=follow attack=0.006 decay=0.10 level=4
-module hush     mix       a0=-0.24 a1=0 a2=0 a3=0
-module reply    mix       a0=-0.16 a1=0 a2=0 a3=0
+module linger   env       mode=follow attack=0.2 decay=9 level=0.85
+module held     vca       response=linear gain=0 cv_depth=2.0 level=3.0
+module hush     mix       a0=-0.10 a1=0.20 a2=0 a3=0
+module reply    mix       a0=-0.15 a1=4.6 a2=0 a3=0
 module walk     mix       a0=0.10 a1=0.07 a2=0.05 a3=0.03
 module climb    mix       a0=0.88 a1=0.06 a2=0.08 a3=0.05
 module key      quant[3]  scale=phrygian root=55 amount=1 glide=0.1
@@ -332,7 +336,7 @@ knob key[1].tune 82.41
 knob key[2].tune 220
 knob key[0].glide 0.28
 knob key[1].glide 0.28
-knob key[2].glide 0.05
+knob key[2].glide 0.35
 # The sky is the climate. Its mix is the weather voltage.
 # Any cell can open a squall — if only sky[0] gates it, the doors
 # die once that cell adapts, and a soak has no second burst.
@@ -750,9 +754,10 @@ patch droneamp.out  -> end[*].in2
 # The singer and the gated pluck share a vocoder. Mix is wet so
 # the dry capture never sits on the speakers; the bed saws are
 # the carrier, so she hears her vowels on A1/E2, not a unison.
-# Toneamp is still the drought door. Breath ducks the weather
-# while a phrase is up and inhibits the throat, which answers
-# in the rest. The plucked door tracks the sung note around A3.
+# Breath is the syllable clock. Linger is the coda: when she
+# stops, it keeps the last note, the throat and a ghost of the
+# pluck, writes the phrase into the trace, and forgets over
+# seconds so the climate can take the idea.
 patch miclim.out    -> sing.in0
 patch toneamp.out   -> sing.in1
 patch sing.out      -> voice.mod
@@ -761,17 +766,27 @@ patch fifth.saw     -> voice.carrier
 patch after.out     -> voice.shift_cv
 patch voice.out     -> end[*].in3
 patch miclim.out    -> breath.gate
+patch breath.out    -> linger.gate
 patch breath.out    -> hush.in0
+patch linger.out    -> hush.in1
 patch hush.out      -> rain[*].in
 patch hush.out      -> grit[*].in
+patch hush.out      -> sky[1].in
 patch breath.out    -> swell.in3
 patch breath.out    -> reply.in0
-patch reply.out     -> pharynx[*].in
-patch reply.out     -> gulp[*].in1
+patch linger.out    -> reply.in1
+patch reply.out     -> toneamp.cv
+patch linger.out    -> pharynx[*].in
+patch linger.out    -> gulp[*].in1
+patch linger.out    -> stamp.in3
+patch linger.out    -> trace.learn
 patch voice.env     -> throat.cutoff_cv
 patch voice.env     -> call.cutoff_cv
-patch breath.out    -> body[*].cutoff_cv
-patch voice.v_oct   -> climb.in0
+patch linger.out    -> throat.cutoff_cv
+patch linger.out    -> body[*].cutoff_cv
+patch voice.v_oct   -> held.in
+patch linger.out    -> held.cv
+patch held.out      -> climb.in0
 patch ear.place     -> climb.in1
 patch hymn.out      -> climb.in2
 patch season.out    -> climb.in3
@@ -800,4 +815,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr breath.out sing.out hush.out reply.out outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env key[0].hz key[1].hz key[2].hz key[0].v_oct trace.norm trace.activity trace.w00 replay[0].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr breath.out linger.out held.gain sing.out hush.out reply.out outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env key[0].hz key[1].hz key[2].hz key[0].v_oct trace.norm trace.activity trace.w00 replay[0].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain

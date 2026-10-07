@@ -1341,6 +1341,8 @@ mod tests {
             .collect();
         assert!(labels.iter().any(|n| n == "sing"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "breath"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "linger"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "held"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "hush"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "reply"), "{labels:?}");
         let mut dry = Stream::new(built(&text));
@@ -1360,7 +1362,7 @@ mod tests {
             "voice.env",
             "breath.out",
             "voice.sung",
-            "hush.out",
+            "linger.out",
             "reply.out",
         ]
         .into_iter()
@@ -1409,19 +1411,99 @@ mod tests {
             live_state[2]
         );
         assert!(
-            live_state[3] < -0.04,
-            "hush never ducked the weather: {}",
+            live_state[3] > 0.2,
+            "linger never took the phrase: {}",
             live_state[3]
         );
         assert!(
-            live_state[4] < -0.02,
-            "reply never freed the throat: {}",
+            live_state[4] > 0.4,
+            "the coda never opened the mouth: {}",
             live_state[4]
         );
         assert!(
             dry_state[1].abs() < 0.08,
             "breath moved with no microphone: {}",
             dry_state[1]
+        );
+    }
+
+    #[test]
+    fn weather_keeps_the_phrase_after_she_stops() {
+        // After a sung note the rack has to keep improvising on that
+        // idea. Breath falls on the cutoff; linger, the last pitch and
+        // a ghost of the mouth have to stay up, then forget.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let mut dry = Stream::new(built(&text));
+        let mut live = Stream::new(built(&text));
+        let rate = live.sample_rate();
+        let block = 256;
+        let channels = 2;
+        let sung_blocks = 280;
+        let rest_blocks = 400;
+        let mut phase = 0.0f32;
+        let mut input = vec![0.0f32; block * channels];
+        let mut dry_buf = vec![0.0f32; block * channels];
+        let mut live_buf = vec![0.0f32; block * channels];
+        let names = [
+            "breath.out",
+            "linger.out",
+            "voice.sung",
+            "reply.out",
+            "toneamp.gain",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+
+        for _ in 0..sung_blocks {
+            for frame in 0..block {
+                phase = (phase + 220.0 / rate).fract();
+                let sample = 0.55 * (phase * std::f32::consts::TAU).sin();
+                input[frame * channels] = sample;
+                input[frame * channels + 1] = sample;
+            }
+            dry.process(&mut dry_buf, channels);
+            live.process_duplex(&input, &mut live_buf, channels);
+        }
+        input.fill(0.0);
+        for _ in 0..rest_blocks {
+            dry.process(&mut dry_buf, channels);
+            live.process_duplex(&input, &mut live_buf, channels);
+        }
+
+        let dry_state = dry.engine_mut().snapshot_sample(&names);
+        let live_state = live.engine_mut().snapshot_sample(&names);
+        assert!(
+            live_state[0] < 0.08,
+            "breath never fell after the cutoff: {}",
+            live_state[0]
+        );
+        assert!(
+            live_state[1] > 0.2,
+            "linger died with the phrase: {}",
+            live_state[1]
+        );
+        assert!(
+            live_state[1] > dry_state[1] + 0.15,
+            "linger moved without a singer: dry {} live {}",
+            dry_state[1],
+            live_state[1]
+        );
+        assert!(
+            (live_state[2] - 220.0).abs() < 50.0 || live_state[2] > 170.0,
+            "the last note was not held: {}",
+            live_state[2]
+        );
+        assert!(
+            live_state[3] > 0.3,
+            "the coda never kept the mouth open: {}",
+            live_state[3]
+        );
+        assert!(
+            live_state[4] > dry_state[4] + 0.01 || live_state[4] > 0.02,
+            "the ghost pluck shut: dry {} live {}",
+            dry_state[4],
+            live_state[4]
         );
     }
 
