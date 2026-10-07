@@ -275,7 +275,7 @@ module breath   env       mode=follow attack=0.006 decay=0.10 level=4
 module linger   env       mode=follow attack=0.2 decay=9 level=0.85
 module held     vca       response=linear gain=0 cv_depth=2.0 level=3.0
 module hush     mix       a0=-0.10 a1=0.20 a2=0 a3=0
-module reply    mix       a0=-0.15 a1=4.6 a2=0 a3=0
+module reply    mix       a0=-0.06 a1=1.9 a2=0 a3=0 level=2.4
 module walk     mix       a0=0.10 a1=0.07 a2=0.05 a3=0.03
 module climb    mix       a0=0.88 a1=0.06 a2=0.08 a3=0.05
 module key      quant[3]  scale=phrygian root=55 amount=1 glide=0.1
