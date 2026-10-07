@@ -922,8 +922,9 @@ mod tests {
 
     #[test]
     fn weather_drone_rolls_in_the_bed() {
-        // The bed has to stay in the bottom and move. If pitch sits still
-        // the drone is a test tone; if it leaves the bass it is another call.
+        // The bed has to stay in the bass and stay a fifth. Brightness
+        // may breathe, but cutoff and gain must not rise together like
+        // an engine. Pitch changes degree; it does not siren.
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let built = built(&text);
         let labels: Vec<_> = (0..built.network.len())
@@ -932,6 +933,8 @@ mod tests {
         assert!(labels.iter().any(|n| n == "drone"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "fifth"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "dronef"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "bedtone"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "loom"), "{labels:?}");
         let mut stream = Stream::new(built);
         let names = [
             "drone.freq",
@@ -948,6 +951,8 @@ mod tests {
         let mut cut_hi = 0.0f32;
         let mut gain_lo = f32::MAX;
         let mut beat = 0.0f32;
+        let mut cuts = Vec::new();
+        let mut gains = Vec::new();
         let mut buffer = vec![0.0f32; 64 * 2];
         for _ in 0..5000 {
             stream.process(&mut buffer, 2);
@@ -958,6 +963,8 @@ mod tests {
             cut_hi = cut_hi.max(now[2]);
             gain_lo = gain_lo.min(now[3]);
             beat = beat.max((now[0] - now[1]).abs());
+            cuts.push(now[2]);
+            gains.push(now[3]);
         }
         assert!(
             f0_lo > 20.0 && f0_hi < 120.0,
@@ -965,14 +972,23 @@ mod tests {
         );
         assert!(
             f0_hi > 1.04 * f0_lo,
-            "the bed never rolled: {f0_lo} .. {f0_hi}"
+            "the bed never changed degree: {f0_lo} .. {f0_hi}"
         );
-        assert!(beat > 0.4, "the two sines sat on one pitch: beat {beat}");
+        assert!(beat > 0.4, "the two oscillators sat on one pitch: beat {beat}");
         assert!(
-            cut_hi > 1.15 * cut_lo,
-            "the bed ladder never walked: {cut_lo} .. {cut_hi}"
+            cut_lo > 45.0 && cut_hi < 140.0,
+            "the bed ladder left the chest: {cut_lo} .. {cut_hi}"
+        );
+        assert!(
+            cut_hi > 1.03 * cut_lo,
+            "the bed ladder froze: {cut_lo} .. {cut_hi}"
         );
         assert!(gain_lo > 0.03, "the bed shut: {gain_lo}");
+        let r = pearson(&cuts, &gains);
+        assert!(
+            r.abs() < 0.72,
+            "cutoff and gain rose together like a motor (r = {r})"
+        );
     }
 
     #[test]

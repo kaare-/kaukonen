@@ -1554,6 +1554,8 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.bank == "tide"));
         assert!(s.map.nodes.iter().any(|n| n.name == "trace"));
         assert!(s.map.nodes.iter().any(|n| n.name == "voice"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "bedtone"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "loom"));
         assert!(s.map.nodes.iter().any(|n| n.name == "sing"));
         assert!(s.map.nodes.iter().any(|n| n.name == "breath"));
         assert!(s.map.nodes.iter().any(|n| n.name == "hush"));

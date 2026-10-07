@@ -74,8 +74,8 @@ of the rain; body stretch coils that sound back into the climate. A
 two-cell tide wanders on a minute scale so a half-hour pass keeps
 walking. A slow BCM connectome watches the rain, the pharynx and
 the pair and writes a little of who the rack was back into the
-climate. Two low sines a fifth apart (A1 and E2) sit under the mix as
-a slowly rolling bed; the plucked tone sits on A3. A vocoder puts a
+climate. A fifth (A1 and E2) sits under the mix as a chest that
+breathes without revving; the plucked tone sits on A3. A vocoder puts a
 singer's vowels and the gated pluck onto those bed saws and snaps the
 sung pitch to A Phrygian. A breath follower ducks the rain and the
 room while a phrase is up and frees the throat to answer in the rest.
