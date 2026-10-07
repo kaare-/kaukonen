@@ -1309,9 +1309,9 @@ mod tests {
         // and the pitch door. The dry waveform still must not sit on
         // the speakers — she hears her vowels on the bed, not herself.
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
-        let built = built(&text);
-        let labels: Vec<_> = (0..built.network.len())
-            .map(|i| built.network.label(ModuleId(i)).to_string())
+        let rack = built(&text);
+        let labels: Vec<_> = (0..rack.network.len())
+            .map(|i| rack.network.label(ModuleId(i)).to_string())
             .collect();
         assert!(labels.iter().any(|n| n == "sing"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "breath"), "{labels:?}");
