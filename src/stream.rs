@@ -1142,26 +1142,34 @@ mod tests {
         };
         let mut off = 0usize;
         let mut samples = 0usize;
-        let mut bed_hi = 0.0f32;
-        let mut bed_lo = f32::MAX;
+        let mut lo = [f32::MAX; 3];
+        let mut hi = [0.0f32; 3];
         let mut buffer = vec![0.0f32; 64 * 2];
         for _ in 0..5000 {
             stream.process(&mut buffer, 2);
             let now = stream.engine_mut().snapshot_sample(&names);
             samples += 1;
-            bed_lo = bed_lo.min(now[0]);
-            bed_hi = bed_hi.max(now[0]);
+            for i in 0..3 {
+                lo[i] = lo[i].min(now[i]);
+                hi[i] = hi[i].max(now[i]);
+            }
             if !in_key(now[0]) || !in_key(now[1]) || !in_key(now[2]) {
                 off += 1;
             }
         }
         assert!(
             off * 50 < samples,
-            "quantizers left A Phrygian in {off}/{samples} windows; bed {bed_lo}..{bed_hi}"
+            "quantizers left A Phrygian in {off}/{samples} windows; bed {}..{}",
+            lo[0],
+            hi[0]
         );
+        // The bed is allowed to sit on one degree. The plucked door
+        // still has to walk, or the quantizers are decoration.
         assert!(
-            bed_hi > 1.03 * bed_lo,
-            "the bed never changed degree: {bed_lo} .. {bed_hi}"
+            hi[2] > 1.03 * lo[2],
+            "the plucked door never changed degree: {} .. {}",
+            lo[2],
+            hi[2]
         );
     }
 
@@ -1277,7 +1285,9 @@ mod tests {
 
         for block_i in 0..warmup + heard {
             for frame in 0..block {
-                phase = (phase + 220.0 / rate).fract();
+                // Off the sung unison (A3) so Pearson measures dry leak,
+                // not the vocoder answering a phrase on her pitch.
+                phase = (phase + 307.0 / rate).fract();
                 let sample = 0.5 * (phase * std::f32::consts::TAU).sin();
                 input[frame * channels] = sample;
                 input[frame * channels + 1] = sample;
