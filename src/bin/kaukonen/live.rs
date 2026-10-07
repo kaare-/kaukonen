@@ -242,7 +242,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                     "verb" => "room",
                     "pharynx" => "pharynx",
                     "hymn" => "hymn",
-                    "ear" => "ear",
+                    "adc" | "ear" => "ear",
                     "trace" | "fade" => "trace",
                     "fbank" => "bank",
                     "band" => "band",

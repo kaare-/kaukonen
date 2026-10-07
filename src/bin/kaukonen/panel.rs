@@ -165,13 +165,15 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("voice", "scale"),
         ("call", "cutoff"),
         ("throat", "cutoff"),
+        ("adc", "gain"),
+        ("ear", "follow"),
+        ("ear", "tilt"),
         ("sky", "bias"),
         ("body", "cutoff"),
         ("verb", "mix"),
         ("verb", "decay"),
         ("pharynx", "rate"),
         ("hymn", "decay"),
-        ("ear", "tilt"),
         ("trace", "natural_decay"),
         ("fbank", "tilt"),
         ("fbank", "mix"),
@@ -1046,7 +1048,7 @@ function render(state) {
 const DESK_LABEL = {
   drone: 'bed', dronef: 'bed', droneamp: 'bed',
   osc: 'tone', voice: 'voice', key: 'key', call: 'call', throat: 'throat',
-  sky: 'sky', body: 'body',
+  adc: 'ear', sky: 'sky', body: 'body',
   verb: 'room', pharynx: 'pharynx', hymn: 'hymn',
   ear: 'ear', trace: 'trace', fade: 'trace',
   fbank: 'bank', band: 'band', outcomp: 'comp',
@@ -1058,10 +1060,10 @@ const DESK_FALLBACK = [
   ['osc', 'tune'], ['key', 'scale'],
   ['voice', 'tune'], ['voice', 'mix'], ['voice', 'scale'],
   ['call', 'cutoff'], ['throat', 'cutoff'],
+  ['adc', 'gain'], ['ear', 'follow'], ['ear', 'tilt'],
   ['sky', 'bias'], ['body', 'cutoff'],
   ['verb', 'mix'], ['verb', 'decay'],
   ['pharynx', 'rate'], ['hymn', 'decay'],
-  ['ear', 'tilt'],
   ['trace', 'natural_decay'],
   ['fbank', 'tilt'], ['fbank', 'mix'],
   ['band', 'cutoff'],
@@ -1552,6 +1554,10 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.bank == "tide"));
         assert!(s.map.nodes.iter().any(|n| n.name == "trace"));
         assert!(s.map.nodes.iter().any(|n| n.name == "voice"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "sing"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "breath"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "hush"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "reply"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "key"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "replay"));
         assert!(s.map.nodes.iter().any(|n| n.bank == "outcomp"));
@@ -1565,6 +1571,8 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "mix"));
         assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "scale"));
         assert!(s.desk.iter().any(|(m, k)| m == "key" && k == "scale"));
+        assert!(s.desk.iter().any(|(m, k)| m == "adc" && k == "gain"));
+        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "follow"));
         assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
         assert!(s
@@ -1601,6 +1609,8 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "osc" && k == "tune"));
         assert!(s.desk.iter().any(|(m, k)| m == "voice" && k == "tune"));
         assert!(s.desk.iter().any(|(m, k)| m == "key" && k == "scale"));
+        assert!(s.desk.iter().any(|(m, k)| m == "adc" && k == "gain"));
+        assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "follow"));
         assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s
             .desk

@@ -75,9 +75,11 @@ two-cell tide wanders on a minute scale so a half-hour pass keeps
 walking. A slow BCM connectome watches the rain, the pharynx and
 the pair and writes a little of who the rack was back into the
 climate. Two low sines a fifth apart (A1 and E2) sit under the mix as
-a slowly rolling bed; the plucked tone sits on A3. A vocoder puts the
-call and the throat onto those bed saws and snaps the sung pitch to
-A Phrygian. Three quantizers hold the bed, the fifth and the pluck
+a slowly rolling bed; the plucked tone sits on A3. A vocoder puts a
+singer's vowels and the gated pluck onto those bed saws and snaps the
+sung pitch to A Phrygian. A breath follower ducks the rain and the
+room while a phrase is up and frees the throat to answer in the rest.
+Three quantizers hold the bed, the fifth and the pluck
 on that scale. CV ladders sit on
 the pharynx (throat), the plucked tone (call) and the stereo mix (body)
 so a squall is a chest, not a beep.
@@ -86,9 +88,9 @@ rumble, chest, formant, speech, hiss and air that steer different
 nerves. A wide CV bandpass, an eight-band fixed filter bank,
 a small room and a tunable compressor sit on the mix at the end. The
 live page desk leads with the bed, the tone, the key, the voice, the mouths, the
-sky and the room. Memory, the ear and the compressor sit after those.
-Capture stirs the sky rather
-than sitting on the speakers. Not every patch is playable —
+ear, the sky and the room. Memory and the compressor sit after those.
+Capture answers a phrase on the vocoded bed rather
+than sitting dry on the speakers. Not every patch is playable —
 `play` needs an `audioout` module, and says so if there isn't one.
 
 ## Finding the interface

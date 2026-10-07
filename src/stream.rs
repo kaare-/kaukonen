@@ -1303,6 +1303,102 @@ mod tests {
         );
     }
 
+    #[test]
+    fn weather_singer_is_answered() {
+        // A jazz phrase has to open the vocoder, the breath follower
+        // and the pitch door. The dry waveform still must not sit on
+        // the speakers — she hears her vowels on the bed, not herself.
+        let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
+        let built = built(&text);
+        let labels: Vec<_> = (0..built.network.len())
+            .map(|i| built.network.label(ModuleId(i)).to_string())
+            .collect();
+        assert!(labels.iter().any(|n| n == "sing"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "breath"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "hush"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "reply"), "{labels:?}");
+        let mut dry = Stream::new(built(&text));
+        let mut live = Stream::new(built(&text));
+        let rate = live.sample_rate();
+        let block = 512;
+        let channels = 2;
+        let warmup = 40;
+        let heard = 60;
+        let mut phase = 0.0f32;
+        let mut input = vec![0.0f32; block * channels];
+        let mut dry_buf = vec![0.0f32; block * channels];
+        let mut live_buf = vec![0.0f32; block * channels];
+        let mut in_left = Vec::with_capacity(heard * block);
+        let mut live_left = Vec::with_capacity(heard * block);
+        let names = [
+            "voice.env",
+            "breath.out",
+            "voice.sung",
+            "hush.out",
+            "reply.out",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+
+        for block_i in 0..warmup + heard {
+            for frame in 0..block {
+                phase = (phase + 220.0 / rate).fract();
+                let sample = 0.55 * (phase * std::f32::consts::TAU).sin();
+                input[frame * channels] = sample;
+                input[frame * channels + 1] = sample;
+            }
+            dry.process(&mut dry_buf, channels);
+            live.process_duplex(&input, &mut live_buf, channels);
+            if block_i < warmup {
+                continue;
+            }
+            for frame in 0..block {
+                in_left.push(input[frame * channels]);
+                live_left.push(live_buf[frame * channels]);
+            }
+        }
+
+        let r = pearson(&in_left, &live_left);
+        assert!(
+            r.abs() < 0.25,
+            "the singer leaked dry onto the output (r = {r})"
+        );
+        let dry_state = dry.engine_mut().snapshot_sample(&names);
+        let live_state = live.engine_mut().snapshot_sample(&names);
+        assert!(
+            live_state[0] > dry_state[0] + 0.02,
+            "the vocoder never heard her: dry {} live {}",
+            dry_state[0],
+            live_state[0]
+        );
+        assert!(
+            live_state[1] > 0.12,
+            "breath never rose: {}",
+            live_state[1]
+        );
+        assert!(
+            (live_state[2] - 220.0).abs() < 40.0 || live_state[2] > 180.0,
+            "the sung door never found her A3: {}",
+            live_state[2]
+        );
+        assert!(
+            live_state[3] < -0.04,
+            "hush never ducked the weather: {}",
+            live_state[3]
+        );
+        assert!(
+            live_state[4] < -0.02,
+            "reply never freed the throat: {}",
+            live_state[4]
+        );
+        assert!(
+            dry_state[1].abs() < 0.08,
+            "breath moved with no microphone: {}",
+            dry_state[1]
+        );
+    }
+
     fn drive_tone(stream: &mut Stream, hz: f32, amp: f32, blocks: usize) {
         let rate = stream.sample_rate();
         let block = 256;
