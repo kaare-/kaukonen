@@ -6,44 +6,104 @@ pub type Volt = f32;
 /// Default soft rail used to keep patched voltages from running away.
 pub const DEFAULT_RAIL: Volt = 10.0;
 
-/// Default integration step. 0.5 ms is audio-ish and cheap for small nets.
+/// Default integration step. 0.5 ms sits in the range the modules were
+/// designed around and is cheap for small nets.
 pub const DEFAULT_DT: f32 = 0.0005;
 
+/// Frames per second matching [`DEFAULT_DT`].
+pub const DEFAULT_SAMPLE_RATE: f32 = 1.0 / DEFAULT_DT;
+
 /// Engine / integrator configuration.
-#[derive(Clone, Copy, Debug)]
+///
+/// A frame is one sample as the outside world sees it. `oversample` subdivides
+/// a frame into finer integration steps, which is what keeps an audio-rate
+/// patch from aliasing without forcing the whole rack to a higher frame rate.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SimConfig {
-    /// Fixed timestep in seconds.
-    pub dt: f32,
+    /// Frames per second of simulated time.
+    pub sample_rate: f32,
+    /// Integration steps per frame. At least 1.
+    pub oversample: u32,
     /// Symmetric clamp rail in volts (`±rail`).
     pub rail: Volt,
 }
 
 impl Default for SimConfig {
     fn default() -> Self {
-        Self {
-            dt: DEFAULT_DT,
-            rail: DEFAULT_RAIL,
-        }
+        Self::control_rate()
     }
 }
 
 impl SimConfig {
+    /// The neural default: 2 kHz frames, no oversampling.
+    pub fn control_rate() -> Self {
+        Self {
+            sample_rate: DEFAULT_SAMPLE_RATE,
+            oversample: 1,
+            rail: DEFAULT_RAIL,
+        }
+    }
+
+    /// Audio rate, oversampled so sharp module behaviour stays clean.
+    pub fn audio(sample_rate: f32) -> Self {
+        Self {
+            sample_rate,
+            oversample: 4,
+            rail: DEFAULT_RAIL,
+        }
+    }
+
+    /// Frames at `1/dt`, no oversampling.
+    pub fn from_dt(dt: f32) -> Self {
+        Self {
+            sample_rate: 1.0 / dt,
+            oversample: 1,
+            rail: DEFAULT_RAIL,
+        }
+    }
+
+    /// The integration step actually handed to modules.
+    pub fn dt(&self) -> f32 {
+        1.0 / (self.sample_rate * self.oversample.max(1) as f32)
+    }
+
+    /// Seconds of simulated time per frame.
+    pub fn frame_period(&self) -> f32 {
+        1.0 / self.sample_rate
+    }
+
     pub fn clamp(&self, v: Volt) -> Volt {
         clamp_rail(v, self.rail)
     }
 }
 
 /// Hard clamp used as a last-resort rail protector.
+///
+/// A negative rail is meaningless, and passing one to `f32::clamp` with the
+/// bounds the wrong way round panics, so it is folded rather than trusted.
 pub fn clamp_rail(v: Volt, rail: Volt) -> Volt {
+    let rail = rail.abs();
     v.clamp(-rail, rail)
 }
 
-/// Soft saturation toward `±rail` without a hard corner.
-pub fn soft_rail(v: Volt, rail: Volt) -> Volt {
-    if rail <= 0.0 {
+/// Transparent below `knee`, then bends smoothly to a hard ceiling.
+///
+/// A converter should not colour everything that passes through it, so this is
+/// exactly unity up to the knee and only rounds off the peaks above it. A plain
+/// tanh would compress the whole signal. It never exceeds `ceiling`.
+pub fn soft_clip(v: Volt, ceiling: Volt, knee: f32) -> Volt {
+    if ceiling <= 0.0 {
         return 0.0;
     }
-    rail * (v / rail).tanh()
+    let knee = knee.clamp(0.0, 0.999);
+    let t = v / ceiling;
+    let magnitude = t.abs();
+    if magnitude <= knee {
+        return v;
+    }
+    let span = 1.0 - knee;
+    let curved = knee + span * ((magnitude - knee) / span).tanh();
+    ceiling * curved * t.signum()
 }
 
 /// How a newly instantiated module differs from its nominal params.
@@ -57,7 +117,10 @@ pub struct InstanceVariation {
 }
 
 impl InstanceVariation {
-    pub const IDENTITY: Self = Self { seed: 0, scale: 0.0 };
+    pub const IDENTITY: Self = Self {
+        seed: 0,
+        scale: 0.0,
+    };
 
     pub fn new(seed: u64, scale: f32) -> Self {
         Self { seed, scale }
@@ -94,6 +157,28 @@ impl Default for InstanceVariation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_negative_rail_folds_rather_than_panicking() {
+        // f32::clamp panics when handed its bounds the wrong way round, and a
+        // rail arrives from a patch file.
+        assert_eq!(clamp_rail(3.0, -10.0), 3.0);
+        assert_eq!(clamp_rail(30.0, -10.0), 10.0);
+        assert_eq!(clamp_rail(-30.0, -10.0), -10.0);
+        assert_eq!(clamp_rail(5.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn soft_clip_never_exceeds_its_ceiling() {
+        for v in [-100.0, -1.0, 0.0, 0.3, 1.0, 100.0] {
+            let out = soft_clip(v, 1.0, 0.7);
+            assert!(out.abs() <= 1.0, "{v} gave {out}");
+            assert_eq!(out.signum(), v.signum(), "{v} changed sign");
+        }
+        // Unity below the knee.
+        assert!((soft_clip(0.5, 1.0, 0.7) - 0.5).abs() < 1e-9);
+        assert_eq!(soft_clip(1.0, 0.0, 0.7), 0.0);
+    }
 
     #[test]
     fn identity_variation_is_zero() {

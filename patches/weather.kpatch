@@ -1,0 +1,840 @@
+# Weather: a rack that does not always play.
+#
+# A slow climate of four drifting RC-1 cells is the sky. Most of the time
+# they sit under threshold and the amplifiers stay shut — you hear almost
+# nothing. When one of them bursts, it current-drives an audible rain bank,
+# walks a four-cell ring, and opens a pair of cross-coupled cells that
+# oscillate in their chaotic window. A short envelope from the rain plucks
+# a tone. Beside that, a granulating filter: four fast RC-1 clocks fire
+# millisecond envelopes, neurons read different slices of the weather only
+# while a grain is open, and a third memory (sand) slowly remaps those
+# slices and the filter's ping. The grains are micro-changes — they do
+# not fill the drought. Then adaptation pulls the sky back down and the
+# room goes quiet again.
+#
+# The doors sidechain each other so a squall is not one swell. A grain
+# cloud ducks the room; rain ducks the pair so it sings in the holes;
+# the squall ducks the grains so they take the afterglow; each grit
+# clock listens to a different weather slice and is inhibited by its
+# neighbor flake. Later stages write back: sift readings echo into the
+# sky cell that produced them, kick the rain or ring they read, and
+# push the pair apart. A grain cloud also sidechains the grit clocks
+# and teaches the memories, so the next burst is not the last one
+# played backwards.
+#
+# A nematode-like command pair sits on top of that. AVA (retreat)
+# listens to the oscillating pair and the afterglow; AVB (advance)
+# listens to the rain and the squall. They veto each other. Advance
+# writes into the sky and the rain and starts a three-cell pharynx
+# that walks at a singing rate; retreat writes the other way and
+# occupies the pair. The throat's hymn ducks the rain so the worm
+# sings in the holes, lifts the grains, and FM's the plucked tone.
+# Body stretch — followers on the weather bed and the pair — coils
+# back into the command cells and the sky, so the sound of the rack
+# is also a proprioceptive input. A two-cell tide wanders on a
+# minute scale and leans the sky, the chest and the room, so a
+# half-hour pass is not the first two minutes played six times.
+# A slow BCM connectome (the trace) watches three nerves: her
+# formant, the body chest, and the climate. It only imprints
+# while a phrase, a stretch or a squall is up, and it forgets
+# on a minute scale. Replay is a scar plus the same
+# reconstruction held open by linger, so a coda is her last
+# idea written back into the sky and the throat, not only a
+# ghost pluck. The climate is a small nervous system that
+# hears itself, and remembers.
+#
+# A wide state-variable bandpass sits on the stereo mix at the end. The
+# climate walks its centre; a grain cloud briefly peaks the Q. It is a
+# large window, not another resonant ping, and a little of the dry mix
+# stays so the climate body is still there.
+#
+# The creature has a mouth. A CV ladder on the pharynx is the throat:
+# closed it is a growl, the hymn opens it into a cry. The plucked
+# tone goes through a second ladder (the call). A stereo body filter
+# sits on the mix before the bank — dark at rest, it opens with the
+# afterglow and the stretch so a squall is a chest, not a beep.
+#
+# Under all of that, a fifth (A1 and E2) is the bed. Each oscillator
+# is sine plus a little triangle, so the chest has odd harmonics
+# instead of a pair of motors. The ladder barely breathes; loudness
+# follows the memory, not the same CV as the cutoff, so the bed does
+# not rev. Pitch changes degree on A Phrygian, then holds. The plucked
+# tone sits on A3. Droughts are that bed, not digital silence.
+#
+# A vocoder sits on a phrase mix. The limited microphone and the
+# gated pluck share the modulator, so a singer's vowels colour the
+# bed saws; toneamp is still the drought door. Mix stays wet — the
+# dry waveform never reaches the converter, or the speakers feed
+# back. Tune stays mostly the A1/E2 carrier so she hears a creature
+# singing her formants, not a unison autotune. An internal saw can
+# lean in; it snaps onto A Phrygian. Three quantizers hold the bed,
+# the fifth and the pluck on that scale (A Bb C D E F G).
+#
+# A breath follower is the syllable clock. A slower linger is the
+# phrase memory. Beside those, a separate mime sidechain tries to
+# copy what it just heard: formant, place and the vocoded mouth
+# into a copy bus, her pitch through a twin VCA. Mime hangs about
+# half a second after each syllable — an "I hear this" nod — then
+# lets linger take the coda. While the nod is up the pitch door
+# tracks her, not the climate. Nothing on that chain is audio.
+# When she stops, linger keeps the last note, the throat and a
+# ghost of the pluck alive, opens the three keep VCAs so the
+# trace replays those nerves, and writes the phrase into the
+# matrix. Over about nine seconds it forgets and the climate
+# takes the idea over. Hair-cell follow is syllable-rate, so
+# diphthongs steer the sky.
+#
+# After that window, an eight-band fixed filter bank (ADDAC 601 centres)
+# colours the mix. Sand tilts the bank; a grain cloud peaks its Q.
+# A small room — short pre-delay into four combs and two allpasses —
+# sits after the bank, before the compressor. It is a closet, not a hall.
+#
+# The microphone is limited, then a six-hair cochlea place-codes it.
+# Rumble turns the sky, chest current-drives the rain, formant walks
+# the ring, the pair and the trace, speech still colours the layer,
+# hiss FM's the call and the grit clocks, air tilts the bank. Place
+# and loudness join the tide. Those bands never reach the converter;
+# the heard reflection is the vocoded bed, not the dry capture.
+# A tunable compressor sits on the stereo mix after the room.
+# The live page desk leads with the knobs that play: the bed, the
+# plucked tone, the key, the voice, the mouths, the ear, the sky,
+# the room. Memory and the compressor sit after those.
+#
+# Leave it running. The tide and the slow sky are meant for a
+# thirty-minute ambient pass, not a two-minute demonstration.
+#
+#   kaukonen play --patch patches/weather.kpatch --block 512 --gain 0.4
+#   (256 is often fine; raise --block if `late` climbs)
+#   then Capture on the page, or `input on` at the console.
+#
+#   kaukonen render --patch patches/weather.kpatch --seconds 24 \
+#       --out out/weather.wav --html out/weather.html --stride 16
+#
+# Things worth turning first:
+#
+#   set sky.bias 2.4          # 1.8 is a long drought, 2.6 is almost always raining
+#   set sky.rate 2            # how slowly the climate turns; cells are staggered
+#   set sky.drift 0.34        # wander that puts a cell in and out of bursting over minutes
+#   set tide.bias 2.1         # the minute-scale pair; higher occupies the season
+#   set rain.bias 1.35        # the audible bank; keep it hungry so it needs the sky
+#   set rain.rate 200
+#   set fan.a0 0.16           # how hard a squall current-drives the rain
+#   set hops.a0 0.14          # neighbour coupling on the ring
+#   set a.bias 3.2            # the oscillating pair; near 3.2 they go chaotic
+#   set room.cutoff 700
+#   set roomamp.gain 0.04     # the quiet floor with no weather
+#   set grit.rate 500         # how fine the grains are
+#   set grit.bias 1.7         # 1.3 is a few sparks, 2.2 is a cloud
+#   set flake.decay 0.02      # grain length; 0.006 is dust, 0.04 is pebbles
+#   set dust.resonance 1.1    # the filter that sings on each grain
+#   set sand.rule bcm         # how the grain memory walks
+#   set roomcv.a1 -0.7        # grain-cloud duck on the room; 0 is lockstep
+#   set paircv.a1 -0.5        # rain ducks the pair so it sings in the holes
+#   set dustcv.a1 -0.45       # squall ducks the grains; they fill the afterglow
+#   set poke.a1 0.16          # how much each grit clock hears its own slice
+#   set cloud.decay 0.6       # how long the grain cloud holds the duck
+#   set echo.a0 0.18          # how hard a grain reading writes back into the sky
+#   set write.a0 0.14         # how hard that reading kicks the cell it read
+#   set recoil.a1 -0.12       # grains push the pair apart
+#   set lean.a0 0.1           # how much the grain sieve tilts the climate
+#   set ava.bias 2.9          # retreat; higher occupies the pair and ducks the rain
+#   set avb.bias 2.9          # advance; higher occupies the rain and starts the throat
+#   set pharynx.bias 1.7      # 1.3 is mute, 1.8 is always humming
+#   set pharynx.rate 60       # how fast the throat walks
+#   set hymn.decay 0.6        # how long a swallow rings
+#   set nibble.a0 -0.2        # how hard the hymn ducks the rain
+#   set crawl.a0 0.12         # how hard advance writes into the sky
+#   set band.cutoff 600       # centre of the final window; 400 is dark, 1600 is thin
+#   set band.q 0.45           # 0.4 is a large band, 2 is a wah
+#   set bandcv.a0 0.28        # how far sand walks the band
+#   set ear.q 1.6             # hair-cell selectivity; 0.8 is wide, 3 is a peak
+#   set ear.tilt -0.4         # − leans rumble into the sky, + leans air into the grit
+#   set ear.follow 0.03       # syllable hairs; 0.08 smears a phrase into weather
+#   set adc.gain 2.0          # how hard speech stirs the sky and the mouth
+#   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
+#   set breath.decay 0.10     # syllable duck; the linger is the coda
+#   set linger.decay 9        # how long the rack keeps her last idea; 4 is a tag, 16 is a chorus
+#   set mime.decay 0.55       # how long the "I hear this" nod hangs; 0.2 is a tick, 1.5 is a shadow
+#   set copy.a0 0.7           # how hard her formant steers the emulate; 0 is pitch only
+#   set keep.cv_depth 2       # how hard linger opens the remembered nerves; 0 is scar only
+#   set drone.tune 55         # A1; the other oscillator is a fifth up. 41 is E, 65 is C
+#   set dronef.cutoff 78      # chest; 40 is a hum, 140 starts to speak
+#   set dronef.cv_depth 0.4   # keep small; 1.8 was the motor revving
+#   set droneamp.gain 0.11    # the quiet floor; 0.04 is a hint, 0.25 sits up
+#   set osc.tune 220          # the plucked A3; 165 is E, 110 is a lower A
+#   set voice.tune 0.28       # 0 is the A1/E2 bed, 1 is a snapped unison
+#   set voice.mix 0.96        # keep wet; dry capture on the speakers feeds back
+#   set voice.follow 0.011    # syllable envelopes; 0.04 is a pad, 0.006 is grit
+#   set voice.scale phrygian  # A Phrygian: A Bb C D E F G
+#   set voice.root 220        # A3, her door; 55 would jump the pluck two octaves
+#   set key.scale phrygian    # the three pitch doors; off is free wander
+#   set trace.natural_decay 0.003  # how long a squall stays in the matrix; 0.02 is a minute
+#   set fade.volts 0.03       # the slow leak; 0 is a scar, 0.15 is sand
+#   set replay.a0 0.08        # the scar; always a little of who the rack was
+#   set replay.a1 0.62        # linger-gated reconstruction; 0 is scar only
+#   set throat.cutoff 200     # growl; hymn opens it. 80 is a chest, 500 is a cry
+#   set call.cutoff 280       # the plucked mouth; 150 is a moan, 800 is a chirp
+#   set body.cutoff 180       # the stereo chest; afterglow opens it
+#   set fbank.air 0.6         # 11 kHz band; keep it down for fur, not hiss
+#   set fbank.mid 0.4         # scoop the 1.1 kHz band
+#   set fbank.tilt 0.6        # + lifts the air, − lifts the sub
+#   set verb.mix 0.3          # how much room; 0.5 is a cave
+#   set verb.decay 0.55       # 0.2 is a slap, 0.8 rings
+#   set outcomp.threshold 1.6 # output compressor
+#   set outcomp.ratio 6       # 2 is gentle, 12 is a limiter
+#   set outcomp.attack 0.004  # 0.001 is smash, 0.04 is level
+#   gain 0.5
+
+rate 48000
+oversample 2
+seconds 12
+seed 23
+mismatch 0.06
+desk drone.tune droneamp.gain dronef.cutoff
+desk osc.tune voice.tune voice.mix
+desk key.scale voice.scale call.cutoff throat.cutoff
+desk adc.gain ear.follow linger.decay mime.decay ear.tilt
+desk sky.bias body.cutoff
+desk verb.mix verb.decay
+desk pharynx.rate hymn.decay
+desk trace.natural_decay
+desk fbank.tilt fbank.mix
+desk band.cutoff
+desk outcomp.threshold
+
+module adc      audioin   gain=1.5 env_rate=10
+module miclim   comp      threshold=1.05 ratio=20 attack=0.0004 release=0.08 knee=0.15 makeup=1 mix=1
+module ear      cochlea   q=1.55 tilt=0.0 inhibit=0.14 follow=0.034 level=5
+module sky      rc1[4]    preset=burst rate=2.4 noise=0.04 drift=0.34 bias=2.02 output_gain=2.3 adaptation_rate=0.0045
+module tide     rc1[2]    preset=subthreshold leak=0 adaptation_rate=0.0016 bias=2.06 rate=0.22 output_gain=1.55 drift=0.38 noise=0.03
+module season   mix       a0=0.055 a1=0.045 a2=0.04 a3=0.03
+module rain     rc1[6]    preset=burst rate=150 noise=0.02 bias=1.38 output_gain=2
+module ring     rc1[4]    preset=burst rate=64 noise=0.02 bias=1.7 output_gain=2
+module hops     mix[4]    a0=0.11 a1=0.1 a2=0.04 a3=0.07
+module a        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.18 rate=58 output_gain=2.2
+module b        rc1       preset=subthreshold leak=0 adaptation_rate=0.006 bias=3.12 rate=66 output_gain=2.2
+module grit     rc1[4]    preset=burst rate=420 noise=0.04 bias=1.48 output_gain=2.1
+module flake    env[4]    mode=ad attack=0.0008 decay=0.014 threshold=1.45 level=5
+module sift     neuron[4] w0=0.48 w1=0.85 w2=0.22 leak=12 gain=3.4 response=0.75
+module sand     tc3       rule=oja gamma=0.45 scaling=0.55 target_norm=1.05 activity_gain=0.35
+module trace    tc3       rule=bcm theta_rate=0.08 natural_decay=0.003 scaling=0.12 target_norm=1.15 activity_gain=0.55 activity_rate=8 drift=0.02 w_max=1.5 w_min=-1.1
+module stamp    mix       a0=0.50 a1=0.28 a2=0.20 a3=0.16
+module fade     source    shape=dc volts=0.03
+module replay   mix[3]    a0=0.08 a1=0.62 a2=0 a3=0
+module poke     mix[4]    a0=1.0 a1=0.11 a2=0.07 a3=-0.08
+module echo     mix[4]    a0=0.08 a1=0.08 a2=0.11 a3=0.05
+module write    mix[4]    a0=0.05 a1=0.12 a2=0 a3=0 level=1.2
+module recoil   mix       a0=0.08 a1=-0.055 a2=0.045 a3=0.04
+module layer    neuron[3] w0=0.5 w1=0.3 w2=0.22 leak=10 gain=3.2 response=0.7
+module brain    tc3       rule=bcm theta_rate=2.5 natural_decay=0.25 scaling=2.2 target_norm=0.9 activity_gain=2 w_max=1.4 w_min=-1.4
+module cortex   tc3       rule=oja gamma=0.5 scaling=0.8 target_norm=1.0 activity_gain=0.15
+module gust     mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 offset=2.65 level=1.0
+module rainbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0 level=0.85
+module rainbox2 mix       a0=0.7 a1=0.65 a2=0 a3=0 level=0.85
+module shower   mix       a0=0.55 a1=0.5 level=0.8
+module ringbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
+module bed      mix       a0=0.7 a1=0.4 level=0.85
+module cross    mix       a0=0.32 a1=-0.32 a2=0 a3=0
+module fan      mix       a0=0.14 a1=0.1 a2=0.03 a3=0.05
+module tug      mix       a0=0.08 a1=0.1 a2=0.06 a3=0.04
+module swell    mix       a0=0.70 a1=0.32 a2=0.35 a3=-0.38 level=1.15
+module open     mix       a0=2 a1=0.35 a2=-0.22 a3=0 level=3.5
+module lift     mix       a0=0.8 a1=0.35 a2=0.25 a3=0.18 offset=0.9 level=0.65
+module stir     mix       a0=0.11 a1=0.08 a2=0.035 a3=-0.04 offset=0.03
+module grain    mix       a0=0.7 a1=0.7 a2=0.7 a3=0.7 level=0.85
+module sieve    mix       a0=0.55 a1=0.5 a2=0.45 a3=0.4 level=0.8
+module tint     mix       a0=0.25 a1=0.16 a2=0.18 a3=0.12 offset=0.55 level=0.55
+module roomcv   mix       a0=1.35 a1=-0.14 a2=-0.08 a3=0.18 level=1.0
+module paircv   mix       a0=1.0 a1=-0.22 a2=0.2 a3=0.12 level=1.0
+module dustcv   mix       a0=1.0 a1=-0.26 a2=0.12 a3=-0.14 level=1.0
+module tonecv   mix       a0=1.0 a1=-0.42 a2=0.14 a3=-0.2 level=1.0
+module lean     mix       a0=0.07 a1=0.05 a2=0.04 a3=0.035
+module left     mix       a0=1.0 a1=0.45 a2=0.22 a3=0.28 level=0.9
+module right    mix       a0=0.75 a1=0.7 a2=0.18 a3=0.34 level=0.9
+module decay    source    shape=dc volts=0.14
+module hiss     noise     level=0.7
+module squall   env       mode=ad attack=0.05 decay=3.6 threshold=1.0 level=5
+module tick     env       mode=ad attack=0.002 decay=0.16 threshold=1.5 level=5
+module cloud    env       mode=ad attack=0.012 decay=0.35 threshold=1.55 level=5
+module after    env       mode=ad attack=0.35 decay=2.2 threshold=1.9 level=5
+module ava      rc1       preset=subthreshold leak=0 adaptation_rate=0.014 bias=2.70 rate=16 output_gain=2.0
+module avb      rc1       preset=subthreshold leak=0 adaptation_rate=0.014 bias=2.62 rate=22 output_gain=2.0
+module drive    mix       a0=0.12 a1=-0.12 a2=0.08 a3=-0.07
+module pharynx  rc1[3]    preset=burst rate=28 noise=0.03 bias=1.46 output_gain=2.0
+module gulp     mix[3]    a0=0.12 a1=0.09 a2=0.05 a3=-0.08
+module song     mix       a0=0.55 a1=0.5 a2=0.45 level=0.85
+module hymn     env       mode=ad attack=0.04 decay=0.7 threshold=1.7 level=5
+module stretch  env[2]    mode=follow attack=0.018 decay=0.14 level=4
+module nibble   mix       a0=-0.07 a1=-0.08 a2=0.09 a3=0.04
+module crawl    mix       a0=0.075 a1=-0.065 a2=0.05 a3=0.035
+module hum      mix       a0=0.16 a1=0.10 a2=0.06 a3=0.04 level=0.8
+module coil     mix       a0=0.07 a1=-0.06 a2=0.045 a3=0.04
+module osc      vco       tune=220 fm_depth=7 pwm_depth=0.04 level=2.4
+module drone    vco       tune=55 fm_depth=1.3 pwm_depth=0.05 level=1.55
+module fifth    vco       tune=82.41 fm_depth=1.5 pwm_depth=0.05 level=1.4
+module dronef   vcf       cutoff=78 resonance=0.18 cv_depth=0.42 res_depth=0.02 drive=1.08 level=1.0
+module droneamp vca       response=linear gain=0.11 cv_depth=0.08 level=1.0
+module bedtone  mix       a0=0.78 a1=0.20 a2=0.70 a3=0.16 level=0.95
+module voice    vocode    q=2.0 follow=0.011 shift=0.12 shift_depth=0.08 mix=0.96 tune=0.28 scale=phrygian root=220 glide=0.04 level=1.05
+module sing     mix       a0=0.88 a1=0.50 a2=0 a3=0 level=1.0
+module breath   env       mode=follow attack=0.006 decay=0.10 level=4
+module linger   env       mode=follow attack=0.2 decay=9 level=0.85
+module mime     env       mode=follow attack=0.012 decay=0.55 level=0.85
+module copy     mix       a0=0.70 a1=0.45 a2=0.50 a3=0.40
+module twin     vca       response=linear gain=0 cv_depth=2.0 level=3.0
+module keep     vca[3]    response=linear gain=0 cv_depth=2.0 level=2.8
+module held     vca       response=linear gain=0 cv_depth=2.0 level=3.0
+module hush     mix       a0=-0.10 a1=0.20 a2=0 a3=0
+module reply    mix       a0=-0.06 a1=1.9 a2=0 a3=0 level=2.4
+module walk     mix       a0=0.10 a1=0.07 a2=0.05 a3=0.03
+module climb    mix       a0=0.92 a1=0.72 a2=0.05 a3=0.04
+module key      quant[3]  scale=phrygian root=55 amount=1 glide=0.1
+module roll     mix       a0=0.035 a1=-0.028 a2=0.018 a3=0.010
+module throat   vcf       cutoff=165 resonance=0.72 cv_depth=1.05 res_depth=0.08 drive=1.55 level=1.12
+module throatcv mix       a0=0.38 a1=0.20 a2=0.16 a3=-0.08
+module call     vcf       cutoff=330 resonance=0.7 cv_depth=0.85 res_depth=0.06 drive=1.4 level=1.08
+module callcv   mix       a0=0.55 a1=0.22 a2=0.16 a3=0.10
+module body     vcf[2]    cutoff=220 resonance=0.36 cv_depth=1.25 res_depth=0.05 drive=1.15 level=1.05
+module bodycv   mix       a0=0.52 a1=0.18 a2=0.16 a3=0.10
+module room     vcf       cutoff=480 resonance=0.55 cv_depth=0.9 res_depth=0.08 drive=1.35
+module air      vcf       cutoff=360 resonance=0.88 cv_depth=0.95 res_depth=0.1 drive=1.45
+module dust     vcf       cutoff=980 resonance=0.92 cv_depth=0.75 res_depth=0.1 drive=1.25
+module roomamp  vca       response=exponential gain=0.035 cv_depth=1.05
+module pairamp  vca       response=exponential gain=0.0 cv_depth=1.15
+module toneamp  vca       response=exponential gain=0.0 cv_depth=1.0
+module dustamp  vca       response=exponential gain=0.0 cv_depth=1.05
+module band     svf[2]    cutoff=720 q=0.48 cv_depth=0.8 q_depth=0.08 drive=1.15 level=2.2
+module bandcv   mix       a0=0.16 a1=0.12 a2=0.09 a3=-0.06
+module end      mix[2]    a0=0.44 a1=0.66 a2=0.20 a3=0.16 level=0.95
+module fbank    fbank[2]  sub=1.32 bass=1.24 low=1.05 lowmid=0.76 mid=0.68 highmid=0.70 high=0.80 air=0.58 q=1.8 tilt=-0.14 tilt_depth=0.2 q_depth=0.08 mix=0.5 level=1.15
+module verb     verb[2]   time=0.08 decay=0.52 damp=0.38 size=0.8 mix=0.28 time_depth=0.01 decay_depth=0.08 level=1.0
+module outcomp  comp[2]   threshold=1.15 ratio=3.5 attack=0.004 release=0.18 knee=0.35 makeup=1.12 mix=1
+module dac      audioout  rate=48000 level=0.30
+
+knob flake[0].decay 0.008
+knob flake[1].decay 0.012
+knob flake[2].decay 0.02
+knob flake[3].decay 0.03
+knob grit[0].rate 380
+knob grit[1].rate 450
+knob grit[2].rate 530
+knob grit[3].rate 620
+knob grit[0].bias 1.44
+knob grit[1].bias 1.52
+knob grit[2].bias 1.40
+knob grit[3].bias 1.56
+knob sky[0].bias 2.18
+knob sky[1].bias 1.90
+knob sky[2].bias 2.10
+knob sky[3].bias 1.94
+knob sky[0].rate 1.8
+knob sky[1].rate 2.6
+knob sky[2].rate 3.4
+knob sky[3].rate 1.4
+knob tide[0].rate 0.16
+knob tide[1].rate 0.31
+knob tide[0].bias 2.12
+knob tide[1].bias 1.94
+knob pharynx[0].rate 22
+knob pharynx[1].rate 30
+knob pharynx[2].rate 38
+knob pharynx[0].bias 1.42
+knob pharynx[1].bias 1.52
+knob pharynx[2].bias 1.40
+knob key[0].tune 55
+knob key[1].tune 82.41
+knob key[2].tune 220
+knob key[0].glide 0.28
+knob key[1].glide 0.28
+knob key[2].glide 0.12
+# The sky is the climate. Its mix is the weather voltage.
+# Any cell can open a squall — if only sky[0] gates it, the doors
+# die once that cell adapts, and a soak has no second burst.
+patch sky[0].out -> gust.in0
+patch sky[1].out -> gust.in1
+patch sky[2].out -> gust.in2
+patch sky[3].out -> gust.in3
+patch gust.out   -> squall.gate
+
+# Rain is hungry. It only fires when the sky, speech, or the memory
+# push current through the fan.
+patch rain[0].out -> rainbox.in0
+patch rain[1].out -> rainbox.in1
+patch rain[2].out -> rainbox.in2
+patch rain[3].out -> rainbox2.in0
+patch rain[4].out -> rainbox2.in1
+patch rain[5].out -> rainbox2.in2
+patch rainbox.out  -> shower.in0
+patch rainbox2.out -> shower.in1
+patch gust.out     -> fan.in0
+patch ear.chest    -> fan.in1
+patch brain.a      -> fan.in2
+patch cloud.inv    -> fan.in3
+patch fan.out      -> rain[*].in
+patch rain[0].out  -> tick.gate
+
+# A small ring walks when the weather is up. Speech leans on the hops
+# the same way it does in duet — envelope, not waveform.
+patch ring[0].out -> hops[1].in0
+patch ring[1].out -> hops[2].in0
+patch ring[2].out -> hops[3].in0
+patch ring[3].out -> hops[0].in0
+patch gust.out    -> hops[*].in1
+patch ear.formant -> hops[*].in2
+patch lean.out    -> hops[*].in3
+patch hops[i].out -> ring[i].in
+patch ring[0].out -> ringbox.in0
+patch ring[1].out -> ringbox.in1
+patch ring[2].out -> ringbox.in2
+patch ring[3].out -> ringbox.in3
+patch shower.out  -> bed.in0
+patch ringbox.out -> bed.in1
+
+# Two cells in the chaotic window, inverted into each other. They run
+# all the time, but pairamp is shut until a squall.
+patch a.out     -> cross.in0
+patch b.out     -> cross.in1
+patch cross.out -> b.in
+patch cross.inv -> a.in
+patch gust.out    -> tug.in0
+patch ear.formant -> tug.in1
+patch shower.out  -> tug.in2
+patch sand.b      -> tug.in3
+patch tug.out      -> a.in
+patch tug.out      -> b.in
+patch sift[2].out  -> recoil.in0
+patch grain.out    -> recoil.in1
+patch cortex.b     -> recoil.in2
+patch layer[2].out -> recoil.in3
+patch recoil.out   -> a.in
+patch recoil.inv   -> b.in
+
+# Command interneurons. Advance (AVB) listens to rain and squall;
+# retreat (AVA) listens to the pair and the afterglow. Each vetoes
+# the other. Body stretch coils into both so the worm feels its own
+# weather. Advance starts the pharynx; retreat occupies the pair.
+patch shower.out       -> drive.in0
+patch a.out            -> drive.in1
+patch squall.out       -> drive.in2
+patch after.out        -> drive.in3
+patch drive.out        -> avb.in
+patch drive.inv        -> ava.in
+patch stretch[0].out   -> coil.in0
+patch stretch[1].out   -> coil.in1
+patch hymn.out         -> coil.in2
+patch song.out         -> coil.in3
+patch coil.out         -> avb.in
+patch coil.inv         -> ava.in
+patch avb.out          -> crawl.in0
+patch ava.out          -> crawl.in1
+patch hymn.out         -> crawl.in2
+patch sand.activity    -> crawl.in3
+patch crawl.out        -> sky[0].in
+patch crawl.inv        -> sky[2].in
+patch crawl.out        -> hops[*].in3
+patch hymn.out         -> nibble.in0
+patch ava.out          -> nibble.in1
+patch avb.out          -> nibble.in2
+patch stretch[1].out   -> nibble.in3
+patch nibble.out       -> rain[*].in
+patch nibble.inv       -> a.in
+patch nibble.inv       -> b.in
+patch nibble.inv       -> grit[*].in
+
+# A slow BCM matrix watches three nerves — her formant (and the
+# vocoded cry), the body chest, the rain — and only imprints
+# while a phrase, a stretch or a squall is up. It forgets on a
+# minute scale. Replay is a scar plus the same reconstruction
+# through linger-gated keep VCAs, so the coda writes her last
+# idea back into the sky, the throat and the pair.
+patch ear.formant      -> trace.a
+patch voice.env        -> trace.a
+patch stretch[0].out   -> trace.b
+patch ear.chest        -> trace.b
+patch shower.out       -> trace.c
+patch linger.out       -> stamp.in0
+patch ear.formant      -> stamp.in1
+patch stretch[0].out   -> stamp.in2
+patch after.out        -> stamp.in3
+patch stamp.out        -> trace.learn
+patch fade.out         -> trace.forget
+patch trace.a          -> keep[0].in
+patch trace.b          -> keep[1].in
+patch trace.c          -> keep[2].in
+patch linger.out       -> keep[*].cv
+patch trace.a          -> replay[0].in0
+patch trace.b          -> replay[1].in0
+patch trace.c          -> replay[2].in0
+patch keep[0].out      -> replay[0].in1
+patch keep[1].out      -> replay[1].in1
+patch keep[2].out      -> replay[2].in1
+patch replay[0].out    -> sky[*].in
+patch replay[1].out    -> gulp[*].in2
+patch replay[1].out    -> throat.cutoff_cv
+patch replay[2].out    -> a.in
+patch replay[2].out    -> b.in
+patch trace.activity   -> droneamp.cv
+patch trace.activity   -> roll.in3
+
+# Three-cell pharynx. Neighbour coupling walks a swallow; advance
+# current-drives it; the hymn and retreat inhibit it so it does not
+# lock. The song is the raw throat voltage. A CV ladder is the mouth:
+# hymn and stretch open it, retreat closes it. The filtered cry sits
+# in the room. Hum still FM's the plucked tone and leans the bank.
+patch pharynx[0].out -> gulp[1].in0
+patch pharynx[1].out -> gulp[2].in0
+patch pharynx[2].out -> gulp[0].in0
+patch avb.out        -> gulp[*].in1
+patch gust.out       -> gulp[*].in2
+patch stretch[0].out -> gulp[*].in2
+patch hymn.out       -> gulp[*].in3
+patch ava.out        -> gulp[*].in3
+patch gulp[i].out    -> pharynx[i].in
+patch pharynx[0].out -> song.in0
+patch pharynx[1].out -> song.in1
+patch pharynx[2].out -> song.in2
+patch song.out       -> hymn.gate
+patch song.out       -> hum.in0
+patch hymn.out       -> hum.in1
+patch avb.out        -> hum.in2
+patch stretch[0].out -> hum.in3
+patch song.out       -> throat.in
+patch hymn.out       -> throatcv.in0
+patch stretch[0].out -> throatcv.in1
+patch avb.out        -> throatcv.in2
+patch ava.out        -> throatcv.in3
+patch throatcv.out   -> throat.cutoff_cv
+patch hymn.out       -> throat.res_cv
+patch throat.out     -> room.in
+patch hum.out        -> osc.fm
+patch hum.out        -> fbank[*].tilt_cv
+patch hum.out        -> verb[*].time_cv
+patch bed.out        -> stretch[0].gate
+patch a.out          -> stretch[1].gate
+
+# A tone that only exists for the length of a rain tick. It goes
+# through a mouth, not straight to the VCA.
+patch rain[2].out -> osc.fm
+patch after.out   -> osc.fm
+patch sand.c      -> osc.pwm
+patch osc.tri     -> call.in
+patch tonecv.out  -> callcv.in0
+patch after.out   -> callcv.in1
+patch hymn.out    -> callcv.in2
+patch stretch[0].out -> callcv.in3
+patch callcv.out  -> call.cutoff_cv
+patch tick.out    -> call.res_cv
+patch call.out    -> toneamp.in
+patch tick.out    -> tonecv.in0
+patch grain.out   -> tonecv.in1
+patch sand.a      -> tonecv.in2
+patch shower.out  -> tonecv.in3
+patch tonecv.out  -> toneamp.cv
+
+# Layer reads rain, ring, and the sky. Cortex watches the layer.
+patch rain[0].out -> layer[0].in0
+patch ring[0].out -> layer[1].in0
+patch sky[0].out  -> layer[2].in0
+patch rain[1].out -> layer[0].in1
+patch rain[3].out -> layer[1].in1
+patch rain[5].out -> layer[2].in1
+patch ear.speech    -> layer[*].in2
+patch layer[0].out -> cortex.a
+patch layer[1].out -> cortex.b
+patch layer[2].out -> cortex.c
+patch shower.out   -> cortex.learn
+patch cortex.activity -> cortex.learn
+patch decay.out    -> cortex.forget
+
+# BCM watches her formant, the chest hair, and the climate.
+# Linger and the formant teach; nothing from the ear is audio.
+patch ear.formant  -> brain.a
+patch ear.chest    -> brain.a
+patch ear.formant  -> brain.b
+patch gust.out     -> brain.c
+patch linger.out   -> brain.learn
+patch ear.formant  -> brain.learn
+patch sieve.out    -> brain.learn
+patch decay.out    -> brain.forget
+patch grain.out    -> cortex.learn
+
+# Speech also current-drives the sky, so talking turns the climate over
+# instead of sitting dry on the speakers. Grain readings write back into
+# each sky cell; the sieve and the afterglow tilt two of them opposite
+# ways so the climate does not repeat. The tide leans the season.
+patch adc.out        -> miclim.in
+patch miclim.out     -> ear.in
+patch sand.activity  -> ear.tilt_cv
+patch ear.rumble     -> sky[*].in
+patch ear.loud       -> sky[*].in
+patch stretch[0].out -> tide[0].in
+patch coil.out       -> tide[1].in
+patch tide[0].out    -> season.in0
+patch tide[1].out    -> season.in1
+patch ear.place      -> season.in2
+patch ear.loud       -> season.in3
+patch season.out     -> sky[*].in
+patch season.out     -> body[*].cutoff_cv
+patch season.out     -> verb[*].time_cv
+patch season.out     -> throat.cutoff_cv
+patch squall.out -> after.gate
+patch sieve.out     -> lean.in0
+patch layer[1].out  -> lean.in1
+patch cloud.out     -> lean.in2
+patch after.out     -> lean.in3
+patch lean.out      -> sky[1].in
+patch lean.inv      -> sky[3].in
+patch flake[0].out  -> echo[0].in0
+patch flake[1].out  -> echo[1].in0
+patch flake[2].out  -> echo[2].in0
+patch flake[3].out  -> echo[3].in0
+patch layer[0].out  -> echo[0].in1
+patch layer[1].out  -> echo[1].in1
+patch layer[2].out  -> echo[2].in1
+patch cortex.a      -> echo[3].in1
+patch sift[0].out   -> echo[0].in2
+patch sift[1].out   -> echo[1].in2
+patch sift[2].out   -> echo[2].in2
+patch sift[3].out   -> echo[3].in2
+patch cloud.out     -> echo[0].in3
+patch after.out     -> echo[1].in3
+patch grain.out     -> echo[2].in3
+patch cortex.activity -> echo[3].in3
+patch echo[i].out   -> sky[i].in
+
+# Timbre and doors. The amplifiers are exponential and almost closed.
+# They no longer share one swell: a grain cloud ducks the room, rain
+# ducks the pair, and nothing from adc.out reaches the bed.
+patch gust.out         -> swell.in0
+patch squall.out       -> swell.in1
+patch ear.rumble       -> swell.in2
+patch swell.out        -> roomcv.in0
+patch cloud.out        -> roomcv.in1
+patch shower.out       -> roomcv.in2
+patch after.out        -> roomcv.in3
+patch roomcv.out       -> roomamp.cv
+patch swell.out        -> paircv.in0
+patch shower.out       -> paircv.in1
+patch after.out        -> paircv.in2
+patch cortex.b         -> paircv.in3
+patch paircv.out       -> pairamp.cv
+patch brain.a          -> lift.in0
+patch rain[1].out      -> lift.in1
+patch ear.chest        -> lift.in2
+patch sand.b           -> lift.in3
+patch lift.out         -> room.cutoff_cv
+patch cortex.a         -> air.cutoff_cv
+patch after.out        -> air.cutoff_cv
+patch brain.activity   -> room.res_cv
+patch cloud.out        -> room.res_cv
+patch hiss.pink        -> air.res_cv
+patch gust.out         -> open.in0
+patch after.out        -> open.in1
+patch cloud.out        -> open.in2
+patch open.out         -> air.cutoff_cv
+
+# Grains. Fast mismatched clocks fire short envelopes. Each clock gets
+# a different weather slice and is inhibited by a neighbor flake, so
+# they do not fire in lockstep. The grain sieve also sidechains the
+# clocks themselves. Neurons read a different slice of the weather
+# while a flake is open; those readings echo into the sky and write
+# back into the cell they came from. Sand slowly remaps the slices
+# and the dust filter's corner. The squall ducks the grains so they
+# take the afterglow. Nothing from adc.out reaches dust.
+patch gust.out     -> stir.in0
+patch ear.air      -> stir.in1
+patch sand.a       -> stir.in2
+patch sieve.out    -> stir.in3
+patch stir.out     -> poke[*].in0
+patch shower.out   -> poke[0].in1
+patch ringbox.out  -> poke[1].in1
+patch after.out    -> poke[2].in1
+patch rain[4].out  -> poke[3].in1
+patch sand.a       -> poke[0].in2
+patch sand.b       -> poke[1].in2
+patch sand.c       -> poke[2].in2
+patch cortex.a     -> poke[3].in2
+patch flake[3].out -> poke[0].in3
+patch flake[0].out -> poke[1].in3
+patch flake[1].out -> poke[2].in3
+patch flake[2].out -> poke[3].in3
+patch poke[i].out  -> grit[i].in
+patch grit[i].out  -> flake[i].gate
+patch grit[0].out  -> cloud.gate
+patch flake[0].out -> grain.in0
+patch flake[1].out -> grain.in1
+patch flake[2].out -> grain.in2
+patch flake[3].out -> grain.in3
+patch bed.out      -> sift[0].in0
+patch shower.out   -> sift[1].in0
+patch a.out        -> sift[2].in0
+patch ring[1].out  -> sift[3].in0
+patch flake[i].out -> sift[i].in1
+patch sand.a       -> sift[0].in2
+patch sand.b       -> sift[1].in2
+patch sand.c       -> sift[2].in2
+patch sand.activity -> sift[3].in2
+patch sift[0].out  -> sieve.in0
+patch sift[1].out  -> sieve.in1
+patch sift[2].out  -> sieve.in2
+patch sift[3].out  -> sieve.in3
+patch sift[0].out  -> sand.a
+patch sift[1].out  -> sand.b
+patch sift[2].out  -> sand.c
+patch grain.out    -> sand.learn
+patch decay.out    -> sand.forget
+# A grain writes back into the cell it read: the flake is the pulse,
+# the sift reading is the slower hang. Rain, the pair and the ring
+# feel the granulator instead of only feeding it.
+patch flake[i].out -> write[i].in0
+patch sift[i].out  -> write[i].in1
+patch write[0].out -> rain[0].in
+patch write[1].out -> rain[2].in
+patch write[2].out -> a.in
+patch write[3].out -> ring[1].in
+patch write[3].out -> hops[1].in3
+patch sand.activity -> tint.in0
+patch grain.out    -> tint.in1
+patch sand.a       -> tint.in2
+patch lean.out     -> tint.in3
+patch tint.out     -> dust.cutoff_cv
+patch sand.activity -> dust.res_cv
+patch sieve.out    -> dust.in
+patch dust.out     -> dustamp.in
+patch grain.out    -> dustcv.in0
+patch squall.out   -> dustcv.in1
+patch sand.activity -> dustcv.in2
+patch shower.out   -> dustcv.in3
+patch dustcv.out   -> dustamp.cv
+
+patch bed.out   -> room.in
+patch room.out  -> roomamp.in
+patch a.out     -> air.in
+patch air.out   -> pairamp.in
+
+patch roomamp.out -> left.in0
+patch pairamp.out -> left.in1
+patch toneamp.out -> left.in2
+patch dustamp.out -> left.in3
+patch roomamp.out -> right.in0
+patch pairamp.out -> right.in1
+patch toneamp.out -> right.in2
+patch dustamp.out -> right.in3
+patch left.out     -> band[0].in
+patch right.out    -> band[1].in
+patch sand.activity -> bandcv.in0
+patch cloud.out     -> bandcv.in1
+patch after.out     -> bandcv.in2
+patch lean.out      -> bandcv.in3
+patch bandcv.out    -> band[*].cutoff_cv
+patch grain.out     -> band[*].q_cv
+patch left.out     -> end[0].in0
+patch band[0].bp   -> end[0].in1
+patch right.out    -> end[1].in0
+patch band[1].bp   -> end[1].in1
+# A parked fifth under the weather. Sine plus a little triangle is
+# a chest, not a motor. The two tides push brightness opposite
+# ways and loudness follows the memory, so cutoff and gain do
+# not rise together. Pitch changes degree, then holds.
+patch drone.sine    -> bedtone.in0
+patch drone.tri     -> bedtone.in1
+patch fifth.sine    -> bedtone.in2
+patch fifth.tri     -> bedtone.in3
+patch bedtone.out   -> dronef.in
+patch tide[0].out   -> roll.in0
+patch tide[1].out   -> roll.in1
+patch season.out    -> roll.in2
+patch after.out     -> roll.in3
+patch roll.out      -> dronef.cutoff_cv
+patch tide[0].out   -> drone.fm
+patch tide[1].out   -> fifth.fm
+patch tide[0].out   -> walk.in0
+patch tide[1].out   -> walk.in1
+patch season.out    -> walk.in2
+patch after.out     -> walk.in3
+patch walk.out      -> key[0].v_oct
+patch walk.out      -> key[1].v_oct
+patch key[0].v_oct  -> drone.v_oct
+patch key[1].v_oct  -> fifth.v_oct
+patch sand.a        -> drone.pwm
+patch sand.b        -> fifth.pwm
+patch dronef.out    -> droneamp.in
+patch droneamp.out  -> end[*].in2
+# The singer and the gated pluck share a vocoder. Mix is wet so
+# the dry capture never sits on the speakers; the bed saws are
+# the carrier, so she hears her vowels on A1/E2, not a unison.
+# Breath is the syllable clock. Linger is the coda. Mime is a
+# separate sidechain that tries to copy what it just heard —
+# an "I hear this" nod. Copy is the vowel and the place; twin
+# is her pitch only while the nod is up, so the door tracks
+# her instead of the climate. When mime falls, linger opens
+# held and the keep VCAs so the coda can take the idea.
+patch miclim.out    -> sing.in0
+patch toneamp.out   -> sing.in1
+patch sing.out      -> voice.mod
+patch drone.saw     -> voice.carrier
+patch fifth.saw     -> voice.carrier
+patch after.out     -> voice.shift_cv
+patch voice.out     -> end[*].in3
+patch miclim.out    -> breath.gate
+patch breath.out    -> linger.gate
+patch breath.out    -> mime.gate
+patch breath.out    -> hush.in0
+patch linger.out    -> hush.in1
+patch hush.out      -> rain[*].in
+patch hush.out      -> grit[*].in
+patch hush.out      -> sky[1].in
+patch breath.out    -> swell.in3
+patch breath.out    -> reply.in0
+patch linger.out    -> reply.in1
+patch reply.out     -> toneamp.cv
+patch linger.out    -> pharynx[*].in
+patch linger.out    -> gulp[*].in1
+patch mime.out      -> pharynx[*].in
+patch mime.out      -> gulp[*].in1
+patch ear.formant   -> copy.in0
+patch ear.place     -> copy.in1
+patch voice.env     -> copy.in2
+patch mime.out      -> copy.in3
+patch copy.out      -> call.cutoff_cv
+patch copy.out      -> throat.cutoff_cv
+patch copy.out      -> body[*].cutoff_cv
+patch voice.env     -> throat.cutoff_cv
+patch voice.env     -> call.cutoff_cv
+patch linger.out    -> throat.cutoff_cv
+patch linger.out    -> body[*].cutoff_cv
+patch voice.v_oct   -> twin.in
+patch mime.out      -> twin.cv
+patch voice.v_oct   -> held.in
+patch linger.out    -> held.cv
+patch mime.inv      -> held.cv
+patch twin.out      -> climb.in0
+patch held.out      -> climb.in1
+patch hymn.out      -> climb.in2
+patch season.out    -> climb.in3
+patch climb.out     -> key[2].v_oct
+patch key[2].v_oct  -> osc.v_oct
+patch end[0].out   -> body[0].in
+patch end[1].out   -> body[1].in
+patch after.out    -> bodycv.in0
+patch stretch[0].out -> bodycv.in1
+patch hymn.out     -> bodycv.in2
+patch sand.activity -> bodycv.in3
+patch bodycv.out   -> body[*].cutoff_cv
+patch cloud.out    -> body[*].res_cv
+patch body[0].out  -> fbank[0].in
+patch body[1].out  -> fbank[1].in
+patch sand.activity -> fbank[*].tilt_cv
+patch ear.air       -> fbank[*].tilt_cv
+patch ear.place     -> band[*].cutoff_cv
+patch grain.out     -> fbank[*].res_cv
+patch fbank[0].out -> verb[0].in
+patch fbank[1].out -> verb[1].in
+patch after.out    -> verb[*].time_cv
+patch cloud.out    -> verb[*].decay_cv
+patch verb[0].out  -> outcomp[0].in
+patch verb[1].out  -> outcomp[1].in
+patch outcomp[0].out -> dac.left
+patch outcomp[1].out -> dac.right
+
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr breath.out linger.out mime.out copy.out twin.gain keep[0].gain held.gain sing.out hush.out reply.out outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env key[0].hz key[1].hz key[2].hz key[0].v_oct trace.norm trace.activity trace.w00 replay[0].out replay[1].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain

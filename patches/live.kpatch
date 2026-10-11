@@ -1,0 +1,60 @@
+# A rack meant to be played, not rendered.
+#
+# Three mismatched RC-1 cells run at an audible rate and are the whole sound
+# source: no oscillator, no stimulus. What you hear is the cells' own
+# excitability, mixed, filtered and amplified. TC-3 watches them and its
+# plasticity sweeps the filter, so the timbre keeps moving on its own.
+#
+#   kaukonen play --patch patches/live.kpatch --device <yours> --block 256 --gain 0.3
+#
+# Things worth turning first, at the prompt:
+#
+#   set cells.rate 400         # 40 is a slow pulse, 4000 is a pitched tone
+#   set cells.bias 2.6         # how hard they are pushed; near 3.2 goes chaotic
+#   set cells.noise 0.08       # thermal noise, which breaks up the regularity
+#   set filt.cutoff 1200       # 60 to 8000
+#   set filt.resonance 1.1     # past about 1.0 the filter sings on its own
+#   set voice.a0 0.6           # how much of cell 0 reaches the filter
+#   set brain.scaling 2        # how hard homeostasis fights the learning
+#   set brain.rule bcm         # try oja, bcm, anti_hebbian, three_factor, stdp
+#   gain 0.6                   # master trim, on top of the patch
+#
+# `knobs cells` lists everything a cell has. Every knob in the rack can be set
+# this way while it plays.
+
+rate 48000
+oversample 2
+seed 7
+mismatch 0.05
+
+module cells rc1[3] preset=burst rate=300 noise=0.02 output_gain=2
+module brain tc3    rule=oja gamma=0.6 scaling=0.6 target_norm=1.2 activity_gain=0.08
+module voice mix    a0=0.4 a1=0.35 a2=0.3 a3=0 level=0.8
+module sweep mix    a0=0.5 a1=0.25 a2=0 a3=0 offset=1.2 level=0.5
+module filt  vcf    cutoff=1400 resonance=0.35 cv_depth=0.5 res_depth=0.05 drive=1.4
+module amp   vca    response=exponential gain=0.75 cv_depth=0.25
+module dac   audioout rate=48000 level=0.6
+
+# The cells are the sound.
+patch cells[0].out -> voice.in0
+patch cells[1].out -> voice.in1
+patch cells[2].out -> voice.in2
+patch voice.out -> filt.in
+
+# The connectome watches them and gates its own learning.
+patch cells[*].out   -> brain.a
+patch brain.activity -> brain.learn
+
+# Its mixed output sweeps the filter; its plasticity rate pushes resonance
+# and opens the amplifier a little further.
+patch brain.a        -> sweep.in0
+patch cells[2].out   -> sweep.in1
+patch sweep.out      -> filt.cutoff_cv
+patch brain.activity -> filt.res_cv
+patch brain.activity -> amp.cv
+
+patch filt.out -> amp.in
+patch amp.out  -> dac.left
+patch amp.out  -> dac.right
+
+record cells[*].v brain.norm brain.activity filt.cutoff amp.gain
