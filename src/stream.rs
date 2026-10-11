@@ -1343,6 +1343,9 @@ mod tests {
         assert!(labels.iter().any(|n| n == "sing"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "breath"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "linger"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "mime"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "copy"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "twin"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "keep[0]"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "held"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "hush"), "{labels:?}");
@@ -1366,6 +1369,9 @@ mod tests {
             "voice.sung",
             "linger.out",
             "reply.out",
+            "mime.out",
+            "twin.gain",
+            "copy.out",
         ]
         .into_iter()
         .map(String::from)
@@ -1427,6 +1433,27 @@ mod tests {
             "breath moved with no microphone: {}",
             dry_state[1]
         );
+        assert!(
+            live_state[5] > 0.15,
+            "the mime nod never rose: {}",
+            live_state[5]
+        );
+        assert!(
+            live_state[6] > 0.08,
+            "twin never opened her pitch: {}",
+            live_state[6]
+        );
+        assert!(
+            live_state[7] > dry_state[7] + 0.04,
+            "the emulate bus never heard her: dry {} live {}",
+            dry_state[7],
+            live_state[7]
+        );
+        assert!(
+            dry_state[5].abs() < 0.08,
+            "mime moved with no microphone: {}",
+            dry_state[5]
+        );
     }
 
     #[test]
@@ -1454,6 +1481,9 @@ mod tests {
             "toneamp.gain",
             "keep[0].gain",
             "replay[1].out",
+            "mime.out",
+            "twin.gain",
+            "held.gain",
         ]
         .into_iter()
         .map(String::from)
@@ -1519,6 +1549,21 @@ mod tests {
             "the coda never replayed the phrase: keep {} replay {}",
             live_state[5],
             live_state[6]
+        );
+        assert!(
+            live_state[7] < 0.1,
+            "the mime nod never let go: {}",
+            live_state[7]
+        );
+        assert!(
+            live_state[8] < 0.08,
+            "twin stayed open after she stopped: {}",
+            live_state[8]
+        );
+        assert!(
+            live_state[9] > 0.06,
+            "held never took the coda pitch: {}",
+            live_state[9]
         );
     }
 

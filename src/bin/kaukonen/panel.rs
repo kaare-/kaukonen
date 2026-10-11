@@ -168,6 +168,7 @@ fn fallback_desk(modules: &[Bank]) -> Vec<(String, String)> {
         ("adc", "gain"),
         ("ear", "follow"),
         ("linger", "decay"),
+        ("mime", "decay"),
         ("ear", "tilt"),
         ("sky", "bias"),
         ("body", "cutoff"),
@@ -1049,7 +1050,7 @@ function render(state) {
 const DESK_LABEL = {
   drone: 'bed', dronef: 'bed', droneamp: 'bed',
   osc: 'tone', voice: 'voice', key: 'key', call: 'call', throat: 'throat',
-  adc: 'ear', linger: 'coda', keep: 'coda', sky: 'sky', body: 'body',
+  adc: 'ear', linger: 'coda', keep: 'coda', mime: 'hear', copy: 'hear', twin: 'hear', sky: 'sky', body: 'body',
   verb: 'room', pharynx: 'pharynx', hymn: 'hymn',
   ear: 'ear', trace: 'trace', fade: 'trace',
   fbank: 'bank', band: 'band', outcomp: 'comp',
@@ -1061,7 +1062,7 @@ const DESK_FALLBACK = [
   ['osc', 'tune'], ['key', 'scale'],
   ['voice', 'tune'], ['voice', 'mix'], ['voice', 'scale'],
   ['call', 'cutoff'], ['throat', 'cutoff'],
-  ['adc', 'gain'], ['ear', 'follow'], ['linger', 'decay'], ['ear', 'tilt'],
+  ['adc', 'gain'], ['ear', 'follow'], ['linger', 'decay'], ['mime', 'decay'], ['ear', 'tilt'],
   ['sky', 'bias'], ['body', 'cutoff'],
   ['verb', 'mix'], ['verb', 'decay'],
   ['pharynx', 'rate'], ['hymn', 'decay'],
@@ -1560,6 +1561,9 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "sing"));
         assert!(s.map.nodes.iter().any(|n| n.name == "breath"));
         assert!(s.map.nodes.iter().any(|n| n.name == "linger"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "mime"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "copy"));
+        assert!(s.map.nodes.iter().any(|n| n.name == "twin"));
         assert!(s.map.nodes.iter().any(|n| n.name == "held"));
         assert!(s.map.nodes.iter().any(|n| n.name == "hush"));
         assert!(s.map.nodes.iter().any(|n| n.name == "reply"));
@@ -1579,6 +1583,7 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "adc" && k == "gain"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "follow"));
         assert!(s.desk.iter().any(|(m, k)| m == "linger" && k == "decay"));
+        assert!(s.desk.iter().any(|(m, k)| m == "mime" && k == "decay"));
         assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "tilt"));
         assert!(s
@@ -1618,6 +1623,7 @@ mod tests {
         assert!(s.desk.iter().any(|(m, k)| m == "adc" && k == "gain"));
         assert!(s.desk.iter().any(|(m, k)| m == "ear" && k == "follow"));
         assert!(s.desk.iter().any(|(m, k)| m == "linger" && k == "decay"));
+        assert!(s.desk.iter().any(|(m, k)| m == "mime" && k == "decay"));
         assert!(s.desk.iter().any(|(m, k)| m == "sky" && k == "bias"));
         assert!(s
             .desk

@@ -244,6 +244,7 @@ pub fn play(args: PlayArgs<'_>) -> Result<(), String> {
                     "hymn" => "hymn",
                     "adc" | "ear" => "ear",
                     "linger" | "keep" => "coda",
+                    "mime" | "copy" | "twin" => "hear",
                     "trace" | "fade" => "trace",
                     "fbank" => "bank",
                     "band" => "band",

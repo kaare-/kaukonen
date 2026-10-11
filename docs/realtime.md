@@ -79,8 +79,9 @@ stops, then forgets into the climate. A fifth (A1 and E2) sits under
 the mix as a chest that breathes without revving; the plucked tone sits
 on A3. A vocoder puts a singer's vowels and the gated pluck onto those
 bed saws and snaps the sung pitch to A Phrygian. A breath follower is
-the syllable clock; a slower linger keeps the last phrase alive after
-she stops, then forgets into the climate.
+the syllable clock; a mime sidechain tries to copy the last syllable
+(formant, place, pitch) while she is up; a slower linger keeps the last
+phrase alive after she stops, then forgets into the climate.
 Three quantizers hold the bed, the fifth and the pluck
 on that scale. CV ladders sit on
 the pharynx (throat), the plucked tone (call) and the stereo mix (body)
