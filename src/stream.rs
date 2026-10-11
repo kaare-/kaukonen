@@ -934,7 +934,7 @@ mod tests {
         assert!(labels.iter().any(|n| n == "fifth"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "dronef"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "bedtone"), "{labels:?}");
-        assert!(labels.iter().any(|n| n == "loom"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "keep[0]"), "{labels:?}");
         let mut stream = Stream::new(built);
         let names = [
             "drone.freq",
@@ -1006,6 +1006,7 @@ mod tests {
             .collect();
         assert!(labels.iter().any(|n| n == "trace"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "replay[0]"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "keep[0]"), "{labels:?}");
         assert!(
             labels
                 .iter()
@@ -1342,6 +1343,7 @@ mod tests {
         assert!(labels.iter().any(|n| n == "sing"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "breath"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "linger"), "{labels:?}");
+        assert!(labels.iter().any(|n| n == "keep[0]"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "held"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "hush"), "{labels:?}");
         assert!(labels.iter().any(|n| n == "reply"), "{labels:?}");
@@ -1430,8 +1432,8 @@ mod tests {
     #[test]
     fn weather_keeps_the_phrase_after_she_stops() {
         // After a sung note the rack has to keep improvising on that
-        // idea. Breath falls on the cutoff; linger, the last pitch and
-        // a ghost of the mouth have to stay up, then forget.
+        // idea. Breath falls on the cutoff; linger, the keep VCAs, the
+        // last pitch and a ghost of the mouth have to stay up, then forget.
         let text = std::fs::read_to_string("patches/weather.kpatch").unwrap();
         let mut dry = Stream::new(built(&text));
         let mut live = Stream::new(built(&text));
@@ -1450,6 +1452,8 @@ mod tests {
             "voice.sung",
             "reply.out",
             "toneamp.gain",
+            "keep[0].gain",
+            "replay[1].out",
         ]
         .into_iter()
         .map(String::from)
@@ -1504,6 +1508,17 @@ mod tests {
             "the ghost pluck shut: dry {} live {}",
             dry_state[4],
             live_state[4]
+        );
+        assert!(
+            live_state[5] > 0.06,
+            "linger never opened the remembered nerves: {}",
+            live_state[5]
+        );
+        assert!(
+            live_state[6].abs() > 0.02 || live_state[5] > 0.06,
+            "the coda never replayed the phrase: keep {} replay {}",
+            live_state[5],
+            live_state[6]
         );
     }
 

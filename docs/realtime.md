@@ -72,14 +72,15 @@ into the sky, the rain and the pair. A command pair (retreat / advance)
 vetoes itself and starts a three-cell pharynx that sings in the holes
 of the rain; body stretch coils that sound back into the climate. A
 two-cell tide wanders on a minute scale so a half-hour pass keeps
-walking. A slow BCM connectome watches the rain, the pharynx and
-the pair and writes a little of who the rack was back into the
-climate. A fifth (A1 and E2) sits under the mix as a chest that
-breathes without revving; the plucked tone sits on A3. A vocoder puts a
-singer's vowels and the gated pluck onto those bed saws and snaps the
-sung pitch to A Phrygian. A breath follower is the syllable clock; a slower linger
-keeps the last phrase alive after she stops, then forgets
-into the climate.
+walking. A slow BCM connectome watches her formant, the body chest and
+the climate and writes a little of who the rack was back into the
+sky and the throat. Linger holds that reconstruction open after she
+stops, then forgets into the climate. A fifth (A1 and E2) sits under
+the mix as a chest that breathes without revving; the plucked tone sits
+on A3. A vocoder puts a singer's vowels and the gated pluck onto those
+bed saws and snaps the sung pitch to A Phrygian. A breath follower is
+the syllable clock; a slower linger keeps the last phrase alive after
+she stops, then forgets into the climate.
 Three quantizers hold the bed, the fifth and the pluck
 on that scale. CV ladders sit on
 the pharynx (throat), the plucked tone (call) and the stereo mix (body)

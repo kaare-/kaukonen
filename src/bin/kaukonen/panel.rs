@@ -1049,7 +1049,7 @@ function render(state) {
 const DESK_LABEL = {
   drone: 'bed', dronef: 'bed', droneamp: 'bed',
   osc: 'tone', voice: 'voice', key: 'key', call: 'call', throat: 'throat',
-  adc: 'ear', linger: 'coda', sky: 'sky', body: 'body',
+  adc: 'ear', linger: 'coda', keep: 'coda', sky: 'sky', body: 'body',
   verb: 'room', pharynx: 'pharynx', hymn: 'hymn',
   ear: 'ear', trace: 'trace', fade: 'trace',
   fbank: 'bank', band: 'band', outcomp: 'comp',
@@ -1556,7 +1556,7 @@ mod tests {
         assert!(s.map.nodes.iter().any(|n| n.name == "trace"));
         assert!(s.map.nodes.iter().any(|n| n.name == "voice"));
         assert!(s.map.nodes.iter().any(|n| n.name == "bedtone"));
-        assert!(s.map.nodes.iter().any(|n| n.name == "loom"));
+        assert!(s.map.nodes.iter().any(|n| n.bank == "keep"));
         assert!(s.map.nodes.iter().any(|n| n.name == "sing"));
         assert!(s.map.nodes.iter().any(|n| n.name == "breath"));
         assert!(s.map.nodes.iter().any(|n| n.name == "linger"));

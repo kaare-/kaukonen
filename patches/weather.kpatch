@@ -34,11 +34,14 @@
 # is also a proprioceptive input. A two-cell tide wanders on a
 # minute scale and leans the sky, the chest and the room, so a
 # half-hour pass is not the first two minutes played six times.
-# A slow BCM connectome (the trace) watches the rain, the pharynx
-# and the pair. It only imprints while a squall or a hymn is up,
-# and it forgets on a minute scale, so a later drought still
-# carries a little of who the rack was. The climate is a small
-# nervous system that hears itself, and remembers.
+# A slow BCM connectome (the trace) watches three nerves: her
+# formant, the body chest, and the climate. It only imprints
+# while a phrase, a stretch or a squall is up, and it forgets
+# on a minute scale. Replay is a scar plus the same
+# reconstruction held open by linger, so a coda is her last
+# idea written back into the sky and the throat, not only a
+# ghost pluck. The climate is a small nervous system that
+# hears itself, and remembers.
 #
 # A wide state-variable bandpass sits on the stereo mix at the end. The
 # climate walks its centre; a grain cloud briefly peaks the Q. It is a
@@ -71,8 +74,9 @@
 # phrase memory. While she is up the rack improvises with her —
 # vocoded vowels on the bed, a little rain still in the room, the
 # throat walking her intensity. When she stops, linger keeps the
-# last note, the throat and a ghost of the pluck alive, and writes
-# that phrase into the trace. Over about nine seconds it forgets
+# last note, the throat and a ghost of the pluck alive, opens the
+# three keep VCAs so the trace replays those nerves, and writes
+# the phrase into the matrix. Over about nine seconds it forgets
 # and the climate takes the idea over. Hair-cell follow is
 # syllable-rate, so diphthongs steer the sky.
 #
@@ -83,10 +87,10 @@
 #
 # The microphone is limited, then a six-hair cochlea place-codes it.
 # Rumble turns the sky, chest current-drives the rain, formant walks
-# the ring and the pair, speech teaches the memories, hiss FM's the
-# call and the grit clocks, air tilts the bank. Place and loudness
-# join the tide. Those bands never reach the converter; the heard
-# reflection is the vocoded bed, not the dry capture.
+# the ring, the pair and the trace, speech still colours the layer,
+# hiss FM's the call and the grit clocks, air tilts the bank. Place
+# and loudness join the tide. Those bands never reach the converter;
+# the heard reflection is the vocoded bed, not the dry capture.
 # A tunable compressor sits on the stereo mix after the room.
 # The live page desk leads with the knobs that play: the bed, the
 # plucked tone, the key, the voice, the mouths, the ear, the sky,
@@ -146,6 +150,7 @@
 #   set miclim.threshold 1.6  # mic limiter; 1.2 is tight, 3 is almost off
 #   set breath.decay 0.10     # syllable duck; the linger is the coda
 #   set linger.decay 9        # how long the rack keeps her last idea; 4 is a tag, 16 is a chorus
+#   set keep.cv_depth 2       # how hard linger opens the remembered nerves; 0 is scar only
 #   set drone.tune 55         # A1; the other oscillator is a fifth up. 41 is E, 65 is C
 #   set dronef.cutoff 78      # chest; 40 is a hum, 140 starts to speak
 #   set dronef.cv_depth 0.4   # keep small; 1.8 was the motor revving
@@ -159,7 +164,8 @@
 #   set key.scale phrygian    # the three pitch doors; off is free wander
 #   set trace.natural_decay 0.003  # how long a squall stays in the matrix; 0.02 is a minute
 #   set fade.volts 0.03       # the slow leak; 0 is a scar, 0.15 is sand
-#   set replay.a0 0.14        # how hard the memory writes back into the climate
+#   set replay.a0 0.08        # the scar; always a little of who the rack was
+#   set replay.a1 0.62        # linger-gated reconstruction; 0 is scar only
 #   set throat.cutoff 200     # growl; hymn opens it. 80 is a chest, 500 is a cry
 #   set call.cutoff 280       # the plucked mouth; 150 is a moan, 800 is a chirp
 #   set body.cutoff 180       # the stereo chest; afterglow opens it
@@ -206,9 +212,9 @@ module flake    env[4]    mode=ad attack=0.0008 decay=0.014 threshold=1.45 level
 module sift     neuron[4] w0=0.48 w1=0.85 w2=0.22 leak=12 gain=3.4 response=0.75
 module sand     tc3       rule=oja gamma=0.45 scaling=0.55 target_norm=1.05 activity_gain=0.35
 module trace    tc3       rule=bcm theta_rate=0.08 natural_decay=0.003 scaling=0.12 target_norm=1.15 activity_gain=0.55 activity_rate=8 drift=0.02 w_max=1.5 w_min=-1.1
-module stamp    mix       a0=0.55 a1=0.32 a2=0.18 a3=0.10
+module stamp    mix       a0=0.50 a1=0.28 a2=0.20 a3=0.16
 module fade     source    shape=dc volts=0.03
-module replay   mix[3]    a0=0.09 a1=0 a2=0 a3=0
+module replay   mix[3]    a0=0.08 a1=0.62 a2=0 a3=0
 module poke     mix[4]    a0=1.0 a1=0.11 a2=0.07 a3=-0.08
 module echo     mix[4]    a0=0.08 a1=0.08 a2=0.11 a3=0.05
 module write    mix[4]    a0=0.05 a1=0.12 a2=0 a3=0 level=1.2
@@ -225,8 +231,6 @@ module shower   mix       a0=0.55 a1=0.5 level=0.8
 module ringbox  mix       a0=0.7 a1=0.65 a2=0.6 a3=0.55 level=0.8
 module bed      mix       a0=0.7 a1=0.4 level=0.85
 module cross    mix       a0=0.32 a1=-0.32 a2=0 a3=0
-module teach    mix       a0=0.3 a1=0.12 a2=0.1 a3=0
-module sense    mix       a0=0.2 a1=0 a2=0 a3=0
 module fan      mix       a0=0.14 a1=0.1 a2=0.03 a3=0.05
 module tug      mix       a0=0.08 a1=0.1 a2=0.06 a3=0.04
 module swell    mix       a0=0.70 a1=0.32 a2=0.35 a3=-0.38 level=1.15
@@ -268,11 +272,11 @@ module fifth    vco       tune=82.41 fm_depth=1.5 pwm_depth=0.05 level=1.4
 module dronef   vcf       cutoff=78 resonance=0.18 cv_depth=0.42 res_depth=0.02 drive=1.08 level=1.0
 module droneamp vca       response=linear gain=0.11 cv_depth=0.08 level=1.0
 module bedtone  mix       a0=0.78 a1=0.20 a2=0.70 a3=0.16 level=0.95
-module loom     mix       a0=0.04 a1=0.03 a2=0 a3=0
 module voice    vocode    q=2.0 follow=0.011 shift=0.12 shift_depth=0.08 mix=0.96 tune=0.28 scale=phrygian root=220 glide=0.04 level=1.05
 module sing     mix       a0=0.88 a1=0.50 a2=0 a3=0 level=1.0
 module breath   env       mode=follow attack=0.006 decay=0.10 level=4
 module linger   env       mode=follow attack=0.2 decay=9 level=0.85
+module keep     vca[3]    response=linear gain=0 cv_depth=2.0 level=2.8
 module held     vca       response=linear gain=0 cv_depth=2.0 level=3.0
 module hush     mix       a0=-0.10 a1=0.20 a2=0 a3=0
 module reply    mix       a0=-0.06 a1=1.9 a2=0 a3=0 level=2.4
@@ -431,23 +435,33 @@ patch nibble.inv       -> a.in
 patch nibble.inv       -> b.in
 patch nibble.inv       -> grit[*].in
 
-# A slow BCM matrix watches three distant slices — the rain, the
-# song, the pair — and only imprints while a squall, a hymn or the
-# body is up. It forgets on a minute scale. Replay writes the
-# reconstructed past back into the sky, the throat and the pair,
-# so a later drought still carries a little of who the rack was.
-patch shower.out       -> trace.a
-patch song.out         -> trace.b
-patch a.out            -> trace.c
-patch after.out        -> stamp.in0
-patch hymn.out         -> stamp.in1
+# A slow BCM matrix watches three nerves — her formant (and the
+# vocoded cry), the body chest, the rain — and only imprints
+# while a phrase, a stretch or a squall is up. It forgets on a
+# minute scale. Replay is a scar plus the same reconstruction
+# through linger-gated keep VCAs, so the coda writes her last
+# idea back into the sky, the throat and the pair.
+patch ear.formant      -> trace.a
+patch voice.env        -> trace.a
+patch stretch[0].out   -> trace.b
+patch ear.chest        -> trace.b
+patch shower.out       -> trace.c
+patch linger.out       -> stamp.in0
+patch ear.formant      -> stamp.in1
 patch stretch[0].out   -> stamp.in2
-patch ear.loud         -> stamp.in3
+patch after.out        -> stamp.in3
 patch stamp.out        -> trace.learn
 patch fade.out         -> trace.forget
+patch trace.a          -> keep[0].in
+patch trace.b          -> keep[1].in
+patch trace.c          -> keep[2].in
+patch linger.out       -> keep[*].cv
 patch trace.a          -> replay[0].in0
 patch trace.b          -> replay[1].in0
 patch trace.c          -> replay[2].in0
+patch keep[0].out      -> replay[0].in1
+patch keep[1].out      -> replay[1].in1
+patch keep[2].out      -> replay[2].in1
 patch replay[0].out    -> sky[*].in
 patch replay[1].out    -> gulp[*].in2
 patch replay[1].out    -> throat.cutoff_cv
@@ -529,20 +543,18 @@ patch see.out      -> cortex.learn
 patch cortex.activity -> cortex.learn
 patch decay.out    -> cortex.forget
 
-# BCM watches a place-coded mic, the weather, and a read of the rain.
-# Speech hair teaches; nothing from the ear is audio.
-patch ear.speech   -> hear.in0
-patch ear.loud     -> hear.in1
+# BCM watches her formant, the chest hair, and the climate.
+# Linger and the formant teach; nothing from the ear is audio.
+patch ear.formant  -> hear.in0
+patch ear.chest    -> hear.in1
 patch shower.out   -> see.in0
 patch cortex.activity -> see.in1
 patch hear.out     -> brain.a
-patch ear.speech   -> sense.in0
-patch sense.out    -> brain.b
+patch ear.formant  -> brain.b
 patch gust.out     -> brain.c
-patch ear.speech   -> teach.in0
-patch brain.activity -> teach.in1
-patch sieve.out    -> teach.in2
-patch teach.out    -> brain.learn
+patch linger.out   -> brain.learn
+patch ear.formant  -> brain.learn
+patch sieve.out    -> brain.learn
 patch decay.out    -> brain.forget
 patch grain.out    -> cortex.learn
 
@@ -722,8 +734,8 @@ patch right.out    -> end[1].in0
 patch band[1].bp   -> end[1].in1
 # A parked fifth under the weather. Sine plus a little triangle is
 # a chest, not a motor. The two tides push brightness opposite
-# ways and loudness follows the season and the memory, so cutoff
-# and gain do not rise together. Pitch changes degree, then holds.
+# ways and loudness follows the memory, so cutoff and gain do
+# not rise together. Pitch changes degree, then holds.
 patch drone.sine    -> bedtone.in0
 patch drone.tri     -> bedtone.in1
 patch fifth.sine    -> bedtone.in2
@@ -734,9 +746,6 @@ patch tide[1].out   -> roll.in1
 patch season.out    -> roll.in2
 patch after.out     -> roll.in3
 patch roll.out      -> dronef.cutoff_cv
-patch season.out    -> loom.in0
-patch stretch[0].out -> loom.in1
-patch loom.out      -> droneamp.cv
 patch tide[0].out   -> drone.fm
 patch tide[1].out   -> fifth.fm
 patch tide[0].out   -> walk.in0
@@ -756,8 +765,9 @@ patch droneamp.out  -> end[*].in2
 # the carrier, so she hears her vowels on A1/E2, not a unison.
 # Breath is the syllable clock. Linger is the coda: when she
 # stops, it keeps the last note, the throat and a ghost of the
-# pluck, writes the phrase into the trace, and forgets over
-# seconds so the climate can take the idea.
+# pluck, opens the keep VCAs so the three nerves replay, writes
+# the phrase into the trace, and forgets over seconds so the
+# climate can take the idea.
 patch miclim.out    -> sing.in0
 patch toneamp.out   -> sing.in1
 patch sing.out      -> voice.mod
@@ -778,8 +788,6 @@ patch linger.out    -> reply.in1
 patch reply.out     -> toneamp.cv
 patch linger.out    -> pharynx[*].in
 patch linger.out    -> gulp[*].in1
-patch linger.out    -> stamp.in3
-patch linger.out    -> trace.learn
 patch voice.env     -> throat.cutoff_cv
 patch voice.env     -> call.cutoff_cv
 patch linger.out    -> throat.cutoff_cv
@@ -815,4 +823,4 @@ patch verb[1].out  -> outcomp[1].in
 patch outcomp[0].out -> dac.left
 patch outcomp[1].out -> dac.right
 
-record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr breath.out linger.out held.gain sing.out hush.out reply.out outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env key[0].hz key[1].hz key[2].hz key[0].v_oct trace.norm trace.activity trace.w00 replay[0].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
+record adc.env ear.rumble ear.chest ear.speech ear.air ear.place ear.loud miclim.gr breath.out linger.out keep[0].gain held.gain sing.out hush.out reply.out outcomp[0].gain sky[0].v tide[0].v rain[0].v grit[0].v flake[0].out cloud.out after.out ava.v avb.v hymn.out song.out stretch[0].out crawl.out nibble.out coil.out band[0].cutoff throat.cutoff call.cutoff body[0].cutoff drone.freq fifth.freq dronef.cutoff droneamp.gain voice.pitch voice.snapped voice.sung voice.lock voice.env key[0].hz key[1].hz key[2].hz key[0].v_oct trace.norm trace.activity trace.w00 replay[0].out replay[1].out fbank[0].env verb[0].wet roomamp.gain pairamp.gain dustamp.gain
